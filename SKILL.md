@@ -1,3 +1,15 @@
+---
+name: openclaw-onebot
+description: "OneBot 11 channel plugin for QQ messaging (NapCat/go-cqhttp). Enables QQ private & group chat as a first-class OpenClaw channel. WebSocket inbound + HTTP API outbound, auto-reconnect, access token auth, allowFrom filtering. 58 tests. 适用于 QQ 消息收发、NapCat 集成、go-cqhttp 对接。"
+metadata:
+  openclaw:
+    emoji: "🐧"
+    type: "channel-plugin"
+    requires:
+      config: ["channels.onebot.wsUrl", "channels.onebot.httpUrl"]
+      bins: ["node", "npm"]
+---
+
 # OpenClaw OneBot 11 Channel Plugin
 
 [中文](#中文) | [English](#english)
@@ -6,7 +18,7 @@
 
 ## 中文
 
-OpenClaw 的 OneBot 11 协议通道插件，支持 [NapCat](https://github.com/NapNeko/NapCatQQ)、[go-cqhttp](https://github.com/Mrs4s/go-cqhttp) 等所有兼容 OneBot 11 协议的 QQ 机器人框架。
+OpenClaw 的 OneBot 11 协议通道插件，让 QQ 成为 OpenClaw 一等消息通道。支持 [NapCat](https://github.com/NapNeko/NapCatQQ)、[go-cqhttp](https://github.com/Mrs4s/go-cqhttp) 等所有兼容 OneBot 11 协议的 QQ 机器人框架。
 
 ### 功能
 
@@ -33,13 +45,12 @@ OpenClaw 主会话
 ### 安装
 
 ```bash
-# 方式一：插件安装
-openclaw plugin install openclaw-onebot
+# 方式一：自动安装
+bash scripts/install.sh
 
 # 方式二：手动安装
-cd ~/.openclaw/plugins
-git clone https://github.com/xucheng/openclaw-onebot.git onebot
-cd onebot && npm install && npm run build
+cp -r src index.ts package.json tsconfig.json ~/.openclaw/plugins/onebot/
+cd ~/.openclaw/plugins/onebot && npm install && npm run build
 ```
 
 重启 gateway 生效。
@@ -93,25 +104,21 @@ ONEBOT_ACCESS_TOKEN=your_token  # 可选
 
 ### 消息目标格式
 
-发送消息时，target 格式为：
 - `private:<QQ号>` — 私聊消息
 - `group:<群号>` — 群聊消息
 - `<QQ号>` — 自动识别为私聊
+
+### 状态检查
+
+```bash
+bash scripts/status.sh
+```
 
 ### NapCat 部署
 
 1. 部署 [NapCat](https://github.com/NapNeko/NapCatQQ)（推荐 Docker）
 2. 启用 WebSocket 和 HTTP API（同一端口）
 3. 在插件中配置对应地址
-
-### 开发
-
-```bash
-npm install
-npm test          # 运行测试
-npm run build     # 编译 TypeScript
-npm run coverage  # 覆盖率报告
-```
 
 ---
 
@@ -121,39 +128,26 @@ An [OpenClaw](https://github.com/openclaw/openclaw) channel plugin that connects
 
 ### Features
 
-- 🔌 Full OneBot 11 protocol support — QQ as a first-class OpenClaw channel
-- 📨 Private & group chat messaging (inbound + outbound)
-- 🖼️ Image, audio (record), and file attachments
+- 🔌 Full OneBot 11 protocol — QQ as a first-class OpenClaw channel
+- 📨 Private & group chat (inbound + outbound)
+- 🖼️ Image, audio, and file attachments
 - 🔄 WebSocket auto-reconnect with exponential backoff
 - 🔒 Optional access token authentication
 - 🎯 `allowFrom` filtering (private/group/user-level)
 - ✅ 58 tests passing
 
-### Architecture
-
-```
-QQ Bot Framework (NapCat / go-cqhttp)
-  ├── WebSocket → Inbound messages
-  └── HTTP API  → Outbound messages
-      ↕
-OpenClaw OneBot Plugin (ChannelPlugin)
-      ↕
-OpenClaw Main Session
-```
-
 ### Installation
 
 ```bash
-# Option 1: Plugin install
-openclaw plugin install openclaw-onebot
+# Auto install
+bash scripts/install.sh
 
-# Option 2: Manual
-cd ~/.openclaw/plugins
-git clone https://github.com/xucheng/openclaw-onebot.git onebot
-cd onebot && npm install && npm run build
+# Manual
+cp -r src index.ts package.json tsconfig.json ~/.openclaw/plugins/onebot/
+cd ~/.openclaw/plugins/onebot && npm install && npm run build
 ```
 
-Restart your gateway to activate.
+Restart gateway to activate.
 
 ### Configuration
 
@@ -179,47 +173,23 @@ ONEBOT_HTTP_URL=http://your-host:port
 ONEBOT_ACCESS_TOKEN=your_token  # optional
 ```
 
-#### Advanced Options
-
-```json
-{
-  "channels": {
-    "onebot": {
-      "enabled": true,
-      "wsUrl": "ws://your-host:port",
-      "httpUrl": "http://your-host:port",
-      "accessToken": "your_token",
-      "allowFrom": ["private:12345", "group:67890"],
-      "users": ["12345"]
-    }
-  }
-}
-```
-
 | Option | Description |
 |--------|-------------|
-| `allowFrom` | Filter inbound messages — `private:<qq>`, `group:<id>`, or `<qq>` (matches both) |
-| `users` | Whitelist of QQ user IDs that can trigger the bot |
-| `accessToken` | Sent as `Authorization: Bearer <token>` for HTTP API and as query param for WebSocket |
+| `allowFrom` | Filter inbound — `private:<qq>`, `group:<id>`, or `<qq>` (matches both) |
+| `users` | Whitelist of QQ user IDs |
+| `accessToken` | Bearer token for HTTP API, query param for WebSocket |
 
 ### Target Format
 
-When sending messages, targets use the format:
 - `private:<qq_number>` — Private message
 - `group:<group_id>` — Group message
 - `<qq_number>` — Auto-detected as private
-
-### NapCat Setup
-
-1. Deploy [NapCat](https://github.com/NapNeko/NapCatQQ) (Docker recommended)
-2. Enable WebSocket server and HTTP API on the same port
-3. Configure the plugin with the NapCat endpoint
 
 ### Development
 
 ```bash
 npm install
-npm test          # Run tests
+npm test          # Run 58 tests
 npm run build     # Compile TypeScript
 npm run coverage  # Coverage report
 ```
