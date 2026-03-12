@@ -1,6 +1,28 @@
 ---
 name: openclaw-onebot
 description: OpenClaw OneBot 11 plugin for QQ via NapCat/go-cqhttp. Native channel integration with private/group chat, group reactions, block streaming, voice pipeline, allowFrom filtering, and local install/repair workflow.
+metadata:
+  openclaw:
+    emoji: "🐧"
+    type: "channel-plugin-installer"
+    requires:
+      bins: ["git", "node", "npm", "openclaw"]
+      config:
+        [
+          "~/.openclaw/openclaw.json",
+          "plugins.allow",
+          "plugins.entries.openclaw-onebot",
+          "plugins.installs.openclaw-onebot",
+          "channels.onebot.wsUrl",
+          "channels.onebot.httpUrl"
+        ]
+      writes:
+        [
+          "~/.openclaw/local-plugins/openclaw-onebot",
+          "~/.openclaw/extensions/onebot",
+          "~/.openclaw/openclaw.json"
+        ]
+      services: ["openclaw-gateway-restart"]
 ---
 
 # OpenClaw OneBot 11 Channel Plugin
@@ -144,14 +166,42 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 
 使用这个 skill 时，默认执行：
 
-1. 克隆或更新 `https://github.com/xucheng/openclaw-onebot.git`
-2. 同步到 `~/.openclaw/extensions/onebot`
-3. 检查 `~/.openclaw/openclaw.json` 中的插件与通道配置
-4. 按需补齐 block streaming 和 group auto reaction 配置
-5. 运行 `npm test`
-6. 重启 OpenClaw gateway
-7. 验证 `openclaw status --deep`
-8. 验证 QQ 收发、群聊 reaction、分块回复
+1. 先核验上游来源：
+   - 检查 GitHub 仓库是否为 `https://github.com/xucheng/openclaw-onebot`
+   - 优先使用明确 tag / commit，而不是盲目跟随远端默认分支
+   - 在执行安装前，先查看 `package.json`、`scripts/`、`test/`
+2. 备份 `~/.openclaw/openclaw.json`
+3. 只有在用户明确同意后，才克隆或更新仓库到 `~/.openclaw/local-plugins/openclaw-onebot`
+4. 同步到 `~/.openclaw/extensions/onebot`
+5. 检查并修改 `~/.openclaw/openclaw.json` 中的插件与通道配置
+6. 按需补齐 block streaming 和 group auto reaction 配置
+7. 在本地执行 `npm test`
+8. 只有在用户确认或任务明确要求时，才重启 OpenClaw gateway
+9. 验证 `openclaw status --deep`
+10. 验证 QQ 收发、群聊 reaction、分块回复
+
+### 安全与确认约定
+
+- 这是一个会修改本地 OpenClaw 安装的 skill
+- 它会读写 `~/.openclaw/` 下的插件目录和配置文件
+- 它可能重启本地 OpenClaw gateway
+- 它会运行仓库中的 `npm test`
+- 在执行克隆、写配置、重启服务前，应先向用户明确说明
+- 如果用户只要求审查或比较方案，不应默认执行安装
+
+### 推荐安装来源
+
+优先级建议：
+
+1. GitHub 仓库源码核验后安装
+2. npm 已发布版本配合仓库代码核验
+3. ClawHub skill 仅作为安装/维护说明入口，不应替代源码审查
+
+不建议：
+
+- 在未查看仓库内容的情况下直接 clone 并执行
+- 在未备份 `~/.openclaw/openclaw.json` 的情况下直接覆盖配置
+- 在不知晓影响范围的情况下直接重启 gateway
 
 ### 安装后建议验证
 
@@ -173,6 +223,7 @@ openclaw status --deep
 
 - 这个 skill 用于安装、更新、修复、验收插件，不用于发布代码
 - 如果 gateway 重启后短暂断开，等待几秒再查一次即可
+- 如果用户更在意供应链安全，应固定到指定 commit/tag，并在隔离环境先跑一次测试
 
 ---
 
@@ -278,14 +329,42 @@ Optional coalescing:
 
 When used, this skill should:
 
-1. Clone or update `https://github.com/xucheng/openclaw-onebot.git`
-2. Sync it into `~/.openclaw/extensions/onebot`
-3. Verify plugin and channel config in `~/.openclaw/openclaw.json`
-4. Enable block streaming and group auto reactions when requested
-5. Run `npm test`
-6. Restart the OpenClaw gateway
-7. Verify `openclaw status --deep`
-8. Verify QQ round-trip messaging, group reactions, and streaming blocks
+1. Verify the upstream source first:
+   - confirm the GitHub repo is `https://github.com/xucheng/openclaw-onebot`
+   - prefer a specific tag or commit over an implicit moving branch head
+   - inspect `package.json`, `scripts/`, and `test/` before execution
+2. Back up `~/.openclaw/openclaw.json`
+3. Only after user confirmation, clone or update the repo into `~/.openclaw/local-plugins/openclaw-onebot`
+4. Sync it into `~/.openclaw/extensions/onebot`
+5. Verify and update plugin/channel config in `~/.openclaw/openclaw.json`
+6. Enable block streaming and group auto reactions when requested
+7. Run `npm test`
+8. Only restart the OpenClaw gateway when the user asked for install/apply behavior
+9. Verify `openclaw status --deep`
+10. Verify QQ round-trip messaging, group reactions, and streaming blocks
+
+### Safety and confirmation rules
+
+- This skill modifies a local OpenClaw installation
+- It reads and writes under `~/.openclaw/`
+- It may restart the local OpenClaw gateway
+- It runs repository code via `npm test`
+- Before cloning, editing config, or restarting services, it should explicitly inform the user
+- If the user only wants review or comparison, it should not install by default
+
+### Preferred install sources
+
+Recommended order:
+
+1. GitHub source after manual inspection
+2. npm published package plus repository inspection
+3. ClawHub as an install/maintenance entrypoint, not as a substitute for source review
+
+Avoid:
+
+- cloning and executing without inspection
+- overwriting `~/.openclaw/openclaw.json` without backup
+- restarting the gateway without understanding impact
 
 ### Post-install checks
 
