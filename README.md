@@ -26,13 +26,14 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 - 😀 **Reaction 支持（群聊）** — 通过 NapCat `set_msg_emoji_like` 给群消息加表情回应；QQ 私聊目前不稳定/通常不生效
 - 👍 **群聊自动 reaction** — 对入站群消息自动点表情，可配置开关，默认开启
 - 🌊 **Block streaming** — 支持 OpenClaw 分块回复，QQ 端会连续收到多条流式消息
+- 🧭 **OpenClaw 文本命令全支持** — `/status`、`/help`、`/commands`、`/model`、`/new`、`/reset` 等命令走统一文本命令链路
 - 🎤 **语音完整链路** — QQ 语音 (SILK/AMR) → MP3 → STT → TTS → 发送 QQ 语音
 - 📦 **消息聚合** — 连续多条消息 1.5s 内自动合并（类似 Telegram 风格）
 - 🖼️ 图片、语音、文件附件发送
 - 🔄 WebSocket 自动重连（指数退避）
 - 🔒 可选 access token 鉴权
 - 🎯 `allowFrom` 消息来源过滤（私聊/群聊/用户级别）
-- ✅ 64 个测试用例全部通过
+- ✅ 80 个测试用例全部通过
 
 ### 与其他方案对比
 
@@ -46,7 +47,7 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 | **语音支持** | ✅ SILK/AMR → MP3 → STT/TTS 全自动 | ❌ 无 | ❌ 无 |
 | **消息聚合** | ✅ 1.5s 智能合并 | ❌ 无 | ❌ 无 |
 | **自动重连** | ✅ WebSocket 指数退避 | daemon 脚本重启 | ❌ 无 |
-| **测试** | ✅ 64 tests | ❌ 无 | ❌ 无 |
+| **测试** | ✅ 80 tests | ❌ 无 | ❌ 无 |
 | **语言** | TypeScript | Python | Python |
 | **需要额外进程** | ❌ 随 gateway 启动 | ✅ 需独立运行 daemon | ✅ 需独立运行 listener |
 
@@ -252,7 +253,7 @@ services:
 
 ```bash
 npm install
-npm test          # 64 tests
+npm test          # 80 tests
 npm run build     # 编译 TypeScript
 npm run coverage  # 覆盖率报告
 ```
@@ -285,7 +286,8 @@ Note:
 - 🔄 WebSocket auto-reconnect with exponential backoff
 - 🔒 Optional access token authentication
 - 🎯 `allowFrom` filtering (private/group/user-level)
-- ✅ 64 tests passing
+- 🧭 Full OpenClaw text-command passthrough (`/status`, `/help`, `/commands`, `/model`, `/new`, `/reset`, etc.)
+- ✅ 80 tests passing
 
 ### Comparison with Alternatives
 
@@ -299,7 +301,7 @@ Note:
 | **Voice** | ✅ SILK/AMR → MP3 → STT/TTS auto | ❌ None | ❌ None |
 | **Batching** | ✅ 1.5s smart merge | ❌ None | ❌ None |
 | **Auto-reconnect** | ✅ Exponential backoff | Daemon restart | ❌ None |
-| **Tests** | ✅ 64 tests | ❌ None | ❌ None |
+| **Tests** | ✅ 80 tests | ❌ None | ❌ None |
 | **Language** | TypeScript | Python | Python |
 | **Extra process** | ❌ Runs with gateway | ✅ Separate daemon | ✅ Separate listener |
 
@@ -442,7 +444,7 @@ npm run react-test -- --message-id <message_id> --emoji 76
 
 ```bash
 npm install
-npm test          # Run 64 tests
+npm test          # Run 80 tests
 npm run build     # Compile TypeScript
 npm run coverage  # Coverage report
 ```

@@ -226,6 +226,35 @@ interface ChatBatch {
   totalChars: number;
 }
 
+function resolveInboundCommandAuthorization(params: {
+  pluginRuntime: ReturnType<typeof getOneBotRuntime>;
+  cfg: Record<string, unknown>;
+  allowFrom?: string[];
+  peerId: string;
+}): boolean {
+  const { pluginRuntime, cfg, allowFrom, peerId } = params;
+  const hasAllowFrom = Array.isArray(allowFrom) && allowFrom.length > 0;
+  const senderAllowedForCommands = !hasAllowFrom
+    || allowFrom.some((pattern) => peerId === pattern || pattern === "*");
+  const resolveCommandAuthorized =
+    pluginRuntime.channel.commands?.resolveCommandAuthorizedFromAuthorizers;
+
+  if (typeof resolveCommandAuthorized !== "function") {
+    return senderAllowedForCommands;
+  }
+
+  return resolveCommandAuthorized({
+    useAccessGroups: (cfg as { commands?: { useAccessGroups?: boolean } }).commands?.useAccessGroups !== false,
+    authorizers: [
+      {
+        configured: hasAllowFrom,
+        allowed: senderAllowedForCommands,
+      },
+    ],
+    modeWhenAccessGroupsOff: "configured",
+  });
+}
+
 // ── Gateway ──
 
 export async function startGateway(ctx: GatewayContext): Promise<void> {
@@ -398,6 +427,12 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
           ? `onebot:group:${event.group_id}`
           : `onebot:private:${senderId}`;
         const toAddress = fromAddress;
+        const commandAuthorized = resolveInboundCommandAuthorization({
+          pluginRuntime,
+          cfg: cfg as Record<string, unknown>,
+          allowFrom: account.allowFrom,
+          peerId,
+        });
 
         // Build media payload for the platform's unified audio pipeline
         const mediaPayload: Record<string, unknown> = {};
@@ -427,6 +462,8 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
           Surface: "onebot",
           MessageSid: String(last.event.message_id),
           Timestamp: last.event.time * 1000,
+          CommandAuthorized: commandAuthorized,
+          CommandSource: "text",
           OriginatingChannel: "onebot",
           OriginatingTo: toAddress,
           ...mediaPayload,

@@ -62,6 +62,17 @@ describe('gateway allowFrom', () => {
             await dispatcherOptions.deliver({ text: 'ok' }, { kind: 'final' });
           },
         },
+        commands: {
+          resolveCommandAuthorizedFromAuthorizers: ({ useAccessGroups, authorizers, modeWhenAccessGroupsOff }: any) => {
+            if (!useAccessGroups) {
+              if (modeWhenAccessGroupsOff === 'allow') return true;
+              if (modeWhenAccessGroupsOff === 'deny') return false;
+              if (!authorizers.some((entry: any) => entry.configured)) return true;
+              return authorizers.some((entry: any) => entry.configured && entry.allowed);
+            }
+            return authorizers.some((entry: any) => entry.configured && entry.allowed);
+          },
+        },
       },
     };
   });

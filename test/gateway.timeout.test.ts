@@ -42,6 +42,7 @@ describe('gateway timeout + error handling', () => {
           resolveEffectiveMessagesConfig: () => ({ responsePrefix: '' }),
           dispatchReplyWithBufferedBlockDispatcher: async () => new Promise(() => {}),
         },
+        commands: {},
       },
     };
 
@@ -110,6 +111,7 @@ describe('gateway timeout + error handling', () => {
             await dispatcherOptions.onError(new Error('dispatch boom'));
           },
         },
+        commands: {},
       },
     };
 

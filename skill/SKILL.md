@@ -33,7 +33,8 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 - 图片、语音、文件附件发送
 - `allowFrom` 来源过滤
 - WebSocket 自动重连
-- 64 个测试用例通过
+- OpenClaw 文本命令全支持（`/status`、`/help`、`/commands`、`/model`、`/new`、`/reset` 等）
+- 80 个测试用例通过
 
 ### 为什么选它
 
@@ -173,7 +174,7 @@ Notes:
 - Attachments for images, voice, and files
 - `allowFrom` filtering
 - WebSocket auto-reconnect
-- 64 tests passing
+- 80 tests passing
 
 ### Why choose it
 
