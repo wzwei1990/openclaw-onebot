@@ -229,4 +229,17 @@ describe('outbound', () => {
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/bad react/);
   });
+
+  it('reactToMessage: returns config errors when httpUrl is missing', async () => {
+    const res = await reactToMessage(mkAccount({ httpUrl: '' }), '55', '66');
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/missing httpUrl/);
+  });
+
+  it('reactToMessage: returns thrown network errors', async () => {
+    (globalThis.fetch as any).mockRejectedValueOnce(new Error('reaction network down'));
+    const res = await reactToMessage(mkAccount(), '55', '66');
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/reaction network down/);
+  });
 });

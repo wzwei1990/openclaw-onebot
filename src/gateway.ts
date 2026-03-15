@@ -44,42 +44,42 @@ export interface GatewayContext {
 
 // ── Text / image extraction ──
 
-function extractText(segments: OneBotMessageSegment[]): string {
+export function extractText(segments: OneBotMessageSegment[]): string {
   return segments
     .filter((seg) => seg.type === "text")
     .map((seg) => String(seg.data.text ?? ""))
     .join("");
 }
 
-function extractImages(segments: OneBotMessageSegment[]): string[] {
+export function extractImages(segments: OneBotMessageSegment[]): string[] {
   return segments
     .filter((seg) => seg.type === "image")
     .map((seg) => String(seg.data.url ?? seg.data.file ?? ""))
     .filter(Boolean);
 }
 
-function extractRecordSegments(segments: OneBotMessageSegment[]): OneBotMessageSegment[] {
+export function extractRecordSegments(segments: OneBotMessageSegment[]): OneBotMessageSegment[] {
   return segments.filter((seg) => seg.type === "record");
 }
 
 // ── Voice processing ──
 
-function isSilkFormat(buf: Buffer): boolean {
+export function isSilkFormat(buf: Buffer): boolean {
   // SILK files: optional 0x02 prefix byte, then "#!SILK"
   const h = buf.toString("utf-8", 0, 10);
   return h.includes("#!SILK");
 }
 
-function isAmrFormat(buf: Buffer): boolean {
+export function isAmrFormat(buf: Buffer): boolean {
   const h = buf.toString("utf-8", 0, 6);
   return h.startsWith("#!AMR");
 }
 
-async function ensureVoiceTmpDir(): Promise<void> {
+export async function ensureVoiceTmpDir(): Promise<void> {
   await mkdir(VOICE_TMP_DIR, { recursive: true });
 }
 
-async function downloadVoiceFile(
+export async function downloadVoiceFile(
   url: string,
   log?: GatewayContext["log"],
 ): Promise<string | null> {
@@ -109,7 +109,7 @@ async function downloadVoiceFile(
   }
 }
 
-async function convertSilkToMp3(
+export async function convertSilkToMp3(
   silkPath: string,
   log?: GatewayContext["log"],
 ): Promise<string | null> {
@@ -140,7 +140,7 @@ async function convertSilkToMp3(
   }
 }
 
-async function convertAmrToMp3(
+export async function convertAmrToMp3(
   amrPath: string,
   log?: GatewayContext["log"],
 ): Promise<string | null> {
@@ -162,7 +162,7 @@ async function convertAmrToMp3(
   }
 }
 
-async function processVoiceSegments(
+export async function processVoiceSegments(
   segments: OneBotMessageSegment[],
   log?: GatewayContext["log"],
 ): Promise<{ path: string; contentType: string }[]> {
@@ -205,7 +205,7 @@ async function processVoiceSegments(
   return results;
 }
 
-function cleanupVoiceFiles(paths: string[]): void {
+export function cleanupVoiceFiles(paths: string[]): void {
   for (const p of paths) {
     unlink(p).catch(() => { /* ignore */ });
   }
@@ -226,7 +226,7 @@ interface ChatBatch {
   totalChars: number;
 }
 
-function resolveInboundCommandAuthorization(params: {
+export function resolveInboundCommandAuthorization(params: {
   pluginRuntime: ReturnType<typeof getOneBotRuntime>;
   cfg: Record<string, unknown>;
   allowFrom?: string[];
