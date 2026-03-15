@@ -33,7 +33,8 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 - 🔄 WebSocket 自动重连（指数退避）
 - 🔒 可选 access token 鉴权
 - 🎯 `allowFrom` 消息来源过滤（私聊/群聊/用户级别）
-- ✅ 80 个测试用例全部通过
+- ✅ 93 个测试用例全部通过
+- 📈 Coverage 已通过仓库阈值（lines/statements >= 85%，branches >= 80%，functions >= 85%）
 
 ### 与其他方案对比
 
@@ -47,7 +48,7 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 | **语音支持** | ✅ SILK/AMR → MP3 → STT/TTS 全自动 | ❌ 无 | ❌ 无 |
 | **消息聚合** | ✅ 1.5s 智能合并 | ❌ 无 | ❌ 无 |
 | **自动重连** | ✅ WebSocket 指数退避 | daemon 脚本重启 | ❌ 无 |
-| **测试** | ✅ 80 tests | ❌ 无 | ❌ 无 |
+| **测试** | ✅ 93 tests | ❌ 无 | ❌ 无 |
 | **语言** | TypeScript | Python | Python |
 | **需要额外进程** | ❌ 随 gateway 启动 | ✅ 需独立运行 daemon | ✅ 需独立运行 listener |
 
@@ -253,9 +254,9 @@ services:
 
 ```bash
 npm install
-npm test          # 80 tests
+npm test          # 93 tests
 npm run build     # 编译 TypeScript
-npm run coverage  # 覆盖率报告
+npm run coverage  # 覆盖率报告（已达阈值）
 ```
 
 ---
@@ -287,7 +288,8 @@ Note:
 - 🔒 Optional access token authentication
 - 🎯 `allowFrom` filtering (private/group/user-level)
 - 🧭 Full OpenClaw text-command passthrough (`/status`, `/help`, `/commands`, `/model`, `/new`, `/reset`, etc.)
-- ✅ 80 tests passing
+- ✅ 93 tests passing
+- 📈 Coverage thresholds passing
 
 ### Comparison with Alternatives
 
@@ -301,7 +303,7 @@ Note:
 | **Voice** | ✅ SILK/AMR → MP3 → STT/TTS auto | ❌ None | ❌ None |
 | **Batching** | ✅ 1.5s smart merge | ❌ None | ❌ None |
 | **Auto-reconnect** | ✅ Exponential backoff | Daemon restart | ❌ None |
-| **Tests** | ✅ 80 tests | ❌ None | ❌ None |
+| **Tests** | ✅ 93 tests | ❌ None | ❌ None |
 | **Language** | TypeScript | Python | Python |
 | **Extra process** | ❌ Runs with gateway | ✅ Separate daemon | ✅ Separate listener |
 
@@ -444,9 +446,9 @@ npm run react-test -- --message-id <message_id> --emoji 76
 
 ```bash
 npm install
-npm test          # Run 80 tests
+npm test          # Run 93 tests
 npm run build     # Compile TypeScript
-npm run coverage  # Coverage report
+npm run coverage  # Coverage report (thresholds passing)
 ```
 
 ## License
