@@ -32,8 +32,7 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
   reload: { configPrefixes: ["channels.onebot"] },
   messaging: {
     normalizeTarget: (target) => {
-      const normalized = target.replace(/^onebot:/i, "");
-      return { ok: true, to: normalized };
+      return target.replace(/^onebot:/i, "");
     },
     targetResolver: {
       looksLikeId: (id) => {
