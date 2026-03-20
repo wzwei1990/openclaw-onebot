@@ -31,10 +31,17 @@ describe('channel plugin shape', () => {
     });
   });
 
-  it('normalizeTarget strips onebot: prefix', () => {
+  it('normalizeTarget strips onebot: prefix and returns string', () => {
     const res = onebotPlugin.messaging!.normalizeTarget('onebot:private:123');
-    expect(res.ok).toBe(true);
-    expect(res.to).toBe('private:123');
+    expect(res).toBe('private:123');
+  });
+
+  it('normalizeTarget passes through non-prefixed target', () => {
+    expect(onebotPlugin.messaging!.normalizeTarget('group:456')).toBe('group:456');
+  });
+
+  it('normalizeTarget is case-insensitive for prefix', () => {
+    expect(onebotPlugin.messaging!.normalizeTarget('OneBot:group:789')).toBe('group:789');
   });
 
   it('looksLikeId recognizes valid ids', () => {
