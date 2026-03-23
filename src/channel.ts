@@ -5,6 +5,7 @@ import { reactToMessage, sendText } from "./outbound.js";
 import { startGateway } from "./gateway.js";
 
 const DEFAULT_ACCOUNT_ID = "default";
+const ONEBOT_MESSAGE_ACTIONS = ["react"] as const;
 
 export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
   id: "onebot",
@@ -97,6 +98,15 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
     },
   },
   actions: {
+    describeMessageTool: ({ cfg }) => {
+      const account = resolveOneBotAccount(cfg);
+      if (!account.enabled || !account.wsUrl || !account.httpUrl) {
+        return null;
+      }
+      return {
+        actions: [...ONEBOT_MESSAGE_ACTIONS],
+      };
+    },
     listActions: () => ["react"],
     supportsAction: ({ action }) => action === "react",
     handleAction: async ({ action, cfg, params, accountId, toolContext }) => {

@@ -23,9 +23,25 @@ describe('channel actions', () => {
   });
 
   it('advertises the react action only', () => {
+    expect(onebotPlugin.actions?.describeMessageTool?.({
+      cfg: {
+        channels: {
+          onebot: {
+            wsUrl: 'ws://127.0.0.1:3000',
+            httpUrl: 'http://127.0.0.1:3001',
+          },
+        },
+      },
+    } as any)).toEqual({ actions: ['react'] });
     expect(onebotPlugin.actions?.listActions()).toEqual(['react']);
     expect(onebotPlugin.actions?.supportsAction?.({ action: 'react' } as any)).toBe(true);
     expect(onebotPlugin.actions?.supportsAction?.({ action: 'wave' } as any)).toBe(false);
+  });
+
+  it('hides message-tool actions when the account is not configured', () => {
+    expect(onebotPlugin.actions?.describeMessageTool?.({
+      cfg: {},
+    } as any)).toBeNull();
   });
 
   it('rejects unsupported actions and missing reaction params', async () => {
