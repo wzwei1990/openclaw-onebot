@@ -18,6 +18,37 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 - 通道 `id` 仍然是 `onebot`
 - 因此 `plugins.allow` / `plugins.entries` / `plugins.installs` 使用 `openclaw-onebot`
 - `channels.onebot` 保持不变
+- ClawHub 上当前保留的 skill 名字是 `openclaw-onebot`
+- 如需同时发布 ClawHub plugin，请使用单独的包名 `openclaw-onebot-plugin`
+
+### ClawHub Plugin 发布
+
+由于 ClawHub 的统一 package 目录会把 `skill` 和 `plugin` 放在同一名字空间里，现有 skill `openclaw-onebot` 不能再被同名 `code-plugin` 占用。
+
+本仓库提供了一个专门的发布产物生成脚本：
+
+```bash
+npm run prepare:clawhub:plugin
+```
+
+生成目录：
+
+```bash
+.clawhub-plugin/openclaw-onebot-plugin
+```
+
+然后使用 ClawHub package 发布命令：
+
+```bash
+SHA=$(git rev-parse HEAD)
+npx clawhub@latest package publish ./.clawhub-plugin/openclaw-onebot-plugin \
+  --family code-plugin \
+  --source-repo xucheng/openclaw-onebot \
+  --source-commit "$SHA" \
+  --source-ref main
+```
+
+发布后的 ClawHub package 名字是 `openclaw-onebot-plugin`，但运行时插件 `id` 仍然保持 `openclaw-onebot`。
 
 ### 功能
 
