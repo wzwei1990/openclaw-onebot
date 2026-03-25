@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { onebotPlugin } from '../src/channel.js';
 
@@ -5,6 +7,7 @@ import { onebotPlugin } from '../src/channel.js';
 
 describe('channel plugin shape', () => {
   const oldFetch = globalThis.fetch;
+  const defaultSharedDir = process.env.ONEBOT_SHARED_DIR ?? join(homedir(), 'napcat', 'shared');
 
   beforeEach(() => {
     globalThis.fetch = vi.fn();
@@ -90,7 +93,7 @@ describe('channel plugin shape', () => {
     const apply = onebotPlugin.setup!.applyAccountConfig!;
     const res1 = apply({ cfg: {}, accountId: 'default', input: { token: 'ws://a,http://b' } } as any);
     expect((res1 as any).channels.onebot.wsUrl).toBe('ws://a');
-    expect((res1 as any).channels.onebot.sharedDir).toBe('/Users/bot/napcat/shared');
+    expect((res1 as any).channels.onebot.sharedDir).toBe(defaultSharedDir);
     expect((res1 as any).channels.onebot.containerSharedDir).toBe('/shared');
     const res2 = apply({ cfg: {}, accountId: 'default', input: { token: 'ws://a,http://b,TOKEN123', name: 'QQBot' } } as any);
     expect((res2 as any).channels.onebot.accessToken).toBe('TOKEN123');
