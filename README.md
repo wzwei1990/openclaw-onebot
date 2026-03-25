@@ -6,9 +6,6 @@
 
 ## 中文
 
-> ⚠️ **ClawHub 安全扫描说明**：本 skill 在 ClawHub 上可能被标记为 "Suspicious"，这是因为 `.ts` (TypeScript) 文件的扩展名被自动识别为 `video/mp2t` (MPEG-2 视频流) MIME 类型触发了误报。所有源码均为标准 TypeScript，可在 [GitHub](https://github.com/xucheng/openclaw-onebot) 审查。
-
-
 OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消息通道。
 
 支持 [NapCat](https://github.com/NapNeko/NapCatQQ)、[go-cqhttp](https://github.com/Mrs4s/go-cqhttp) 等所有兼容 OneBot 11 协议的 QQ 机器人框架。
@@ -283,9 +280,6 @@ npm run sync:openclaw-cli  # 重新同步 OpenClaw CLI 的 shared-dir 参数
 ---
 
 ## English
-
-> ⚠️ **ClawHub Security Note**: This skill may be flagged as "Suspicious" on ClawHub because `.ts` (TypeScript) files are auto-detected as `video/mp2t` (MPEG-2 Transport Stream) MIME type, triggering a false positive. All source code is standard TypeScript — review it on [GitHub](https://github.com/xucheng/openclaw-onebot).
-
 
 An [OpenClaw](https://github.com/openclaw/openclaw) **native channel plugin** that connects to [NapCat](https://github.com/NapNeko/NapCatQQ), [go-cqhttp](https://github.com/Mrs4s/go-cqhttp), or any OneBot 11 compatible QQ bot framework.
 
