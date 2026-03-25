@@ -13,6 +13,7 @@ mkdir -p "$PLUGIN_DIR"
 
 # 复制源码
 cp -r "$SKILL_DIR"/src "$PLUGIN_DIR"/
+cp -r "$SKILL_DIR"/scripts "$PLUGIN_DIR"/
 cp "$SKILL_DIR"/index.ts "$PLUGIN_DIR"/
 cp "$SKILL_DIR"/package.json "$PLUGIN_DIR"/
 cp "$SKILL_DIR"/package-lock.json "$PLUGIN_DIR"/
@@ -23,6 +24,7 @@ cp "$SKILL_DIR"/tsconfig.json "$PLUGIN_DIR"/
 cd "$PLUGIN_DIR"
 npm install --omit=dev 2>/dev/null
 npm run build 2>/dev/null
+node "$SKILL_DIR/scripts/sync-openclaw-cli.mjs" 2>/dev/null || echo "⚠️  OpenClaw CLI sync skipped; run npm run sync:openclaw-cli if needed."
 
 echo "✅ OneBot plugin installed to $PLUGIN_DIR"
 echo ""

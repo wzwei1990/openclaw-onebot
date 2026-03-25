@@ -64,8 +64,8 @@ npx clawhub@latest package publish ./.clawhub-plugin/openclaw-onebot-plugin \
 - 🔄 WebSocket 自动重连（指数退避）
 - 🔒 可选 access token 鉴权
 - 🎯 `allowFrom` 消息来源过滤（私聊/群聊/用户级别）
-- ✅ 93 个测试用例全部通过
-- 📈 Coverage 已通过仓库阈值（lines/statements >= 85%，branches >= 80%，functions >= 85%）
+- ✅ 106 个测试用例全部通过
+- 📈 覆盖率：Statements/Lines 92.11%，Branches 83.68%，Functions 95.16%；`gateway.ts` Statements/Lines 86.14%
 
 ### 与其他方案对比
 
@@ -79,7 +79,7 @@ npx clawhub@latest package publish ./.clawhub-plugin/openclaw-onebot-plugin \
 | **语音支持** | ✅ SILK/AMR → MP3 → STT/TTS 全自动 | ❌ 无 | ❌ 无 |
 | **消息聚合** | ✅ 1.5s 智能合并 | ❌ 无 | ❌ 无 |
 | **自动重连** | ✅ WebSocket 指数退避 | daemon 脚本重启 | ❌ 无 |
-| **测试** | ✅ 93 tests | ❌ 无 | ❌ 无 |
+| **测试** | ✅ 106 tests | ❌ 无 | ❌ 无 |
 | **语言** | TypeScript | Python | Python |
 | **需要额外进程** | ❌ 随 gateway 启动 | ✅ 需独立运行 daemon | ✅ 需独立运行 listener |
 
@@ -114,9 +114,11 @@ OpenClaw Gateway (统一消息管线)
 bash scripts/install.sh
 
 # 或手动
-cp -r src index.ts package.json package-lock.json openclaw.plugin.json tsconfig.json ~/.openclaw/plugins/onebot/
+cp -r src scripts index.ts package.json package-lock.json openclaw.plugin.json tsconfig.json ~/.openclaw/plugins/onebot/
 cd ~/.openclaw/plugins/onebot && npm install && npm run build
 ```
+
+`scripts/install.sh` 会在编译完成后自动尝试执行 `scripts/sync-openclaw-cli.mjs`，把 `--shared-dir` / `--container-shared-dir` 接到本机 OpenClaw CLI。
 
 #### 2. 配置
 
@@ -137,6 +139,15 @@ cd ~/.openclaw/plugins/onebot && npm install && npm run build
       "enabled": true,
       "wsUrl": "ws://your-host:3001",
       "httpUrl": "http://your-host:3001",
+      "accessToken": "your_token",
+      "sharedDir": "/Users/you/napcat/shared",
+      "containerSharedDir": "/shared",
+      "accessToken": "your_token",
+      "sharedDir": "/Users/you/napcat/shared",
+      "containerSharedDir": "/shared",
+      "accessToken": "your_token",
+      "sharedDir": "/Users/you/napcat/shared",
+      "containerSharedDir": "/shared",
       "groupAutoReact": true,
       "groupAutoReactEmojiId": 1
     }
@@ -157,6 +168,11 @@ ONEBOT_HTTP_URL=http://your-host:3001
 ONEBOT_ACCESS_TOKEN=your_token  # 可选
 ```
 
+OneBot `setup` 也支持：
+- `--token wsUrl,httpUrl[,accessToken[,sharedDir[,containerSharedDir]]]`
+- 或 `openclaw channels add --channel onebot --shared-dir <hostPath> --container-shared-dir /shared`
+- 如果 OpenClaw 升级后覆盖了 CLI dist，可在插件目录执行 `npm run sync:openclaw-cli` 重新同步参数接线
+
 #### 3. 重启 Gateway
 
 ```bash
@@ -173,6 +189,8 @@ openclaw gateway restart
       "wsUrl": "ws://your-host:3001",
       "httpUrl": "http://your-host:3001",
       "accessToken": "your_token",
+      "sharedDir": "/Users/you/napcat/shared",
+      "containerSharedDir": "/shared",
       "allowFrom": ["private:12345", "group:67890"],
       "groupAutoReact": true,
       "groupAutoReactEmojiId": 1
@@ -185,6 +203,8 @@ openclaw gateway restart
 |------|------|
 | `allowFrom` | 消息来源白名单 — `private:<QQ号>`、`group:<群号>`、或 `*`（允许所有） |
 | `accessToken` | HTTP API 用 Bearer token，WebSocket 用 query 参数 |
+| `sharedDir` | 宿主机共享目录；默认 `~/napcat/shared`，用于把语音/图片 stage 给 NapCat |
+| `containerSharedDir` | 容器内共享目录；默认 `/shared`，与 `sharedDir` 对应 |
 | `groupAutoReact` | 是否对入站群消息自动添加 reaction，默认 `true` |
 | `groupAutoReactEmojiId` | 群聊自动 reaction 使用的 QQ emoji id，默认 `1` |
 
@@ -285,9 +305,10 @@ services:
 
 ```bash
 npm install
-npm test          # 93 tests
+npm test          # 106 tests
 npm run build     # 编译 TypeScript
-npm run coverage  # 覆盖率报告（已达阈值）
+npm run coverage  # 覆盖率报告（`gateway.ts` lines/statements 86.14%）
+npm run sync:openclaw-cli  # 重新同步 OpenClaw CLI 的 shared-dir 参数
 ```
 
 ---
@@ -319,8 +340,8 @@ Note:
 - 🔒 Optional access token authentication
 - 🎯 `allowFrom` filtering (private/group/user-level)
 - 🧭 Full OpenClaw text-command passthrough (`/status`, `/help`, `/commands`, `/model`, `/new`, `/reset`, etc.)
-- ✅ 93 tests passing
-- 📈 Coverage thresholds passing
+- ✅ 106 tests passing
+- 📈 Coverage: Statements/Lines 92.11%, Branches 83.68%, Functions 95.16%; `gateway.ts` Statements/Lines 86.14%
 
 ### Comparison with Alternatives
 
@@ -334,7 +355,7 @@ Note:
 | **Voice** | ✅ SILK/AMR → MP3 → STT/TTS auto | ❌ None | ❌ None |
 | **Batching** | ✅ 1.5s smart merge | ❌ None | ❌ None |
 | **Auto-reconnect** | ✅ Exponential backoff | Daemon restart | ❌ None |
-| **Tests** | ✅ 93 tests | ❌ None | ❌ None |
+| **Tests** | ✅ 106 tests | ❌ None | ❌ None |
 | **Language** | TypeScript | Python | Python |
 | **Extra process** | ❌ Runs with gateway | ✅ Separate daemon | ✅ Separate listener |
 
@@ -347,6 +368,8 @@ Note:
 ```bash
 bash scripts/install.sh
 ```
+
+`scripts/install.sh` also runs `scripts/sync-openclaw-cli.mjs` so the local OpenClaw CLI keeps the OneBot `--shared-dir` / `--container-shared-dir` flags wired in after install.
 
 #### 2. Configure
 
@@ -386,6 +409,11 @@ ONEBOT_WS_URL=ws://your-host:3001
 ONEBOT_HTTP_URL=http://your-host:3001
 ONEBOT_ACCESS_TOKEN=your_token  # optional
 ```
+
+OneBot setup also supports:
+- `--token wsUrl,httpUrl[,accessToken[,sharedDir[,containerSharedDir]]]`
+- or `openclaw channels add --channel onebot --shared-dir <hostPath> --container-shared-dir /shared`
+- if an OpenClaw upgrade overwrites the installed CLI dist, run `npm run sync:openclaw-cli` from the plugin directory to re-apply the flags
 
 #### 3. Restart Gateway
 
@@ -464,6 +492,8 @@ npm run react-test -- --message-id <message_id> --emoji 76
 |--------|-------------|
 | `allowFrom` | Whitelist — `private:<qq>`, `group:<id>`, or `*` (allow all) |
 | `accessToken` | Bearer token for HTTP, query param for WebSocket |
+| `sharedDir` | Host-side shared directory; defaults to `~/napcat/shared` for staging outbound media |
+| `containerSharedDir` | Container-side mount path; defaults to `/shared` and should map to `sharedDir` |
 | `groupAutoReact` | Whether to auto-react to inbound group messages; defaults to `true` |
 | `groupAutoReactEmojiId` | QQ emoji id used for automatic group reactions; defaults to `1` |
 
@@ -477,9 +507,10 @@ npm run react-test -- --message-id <message_id> --emoji 76
 
 ```bash
 npm install
-npm test          # Run 93 tests
+npm test          # Run 106 tests
 npm run build     # Compile TypeScript
-npm run coverage  # Coverage report (thresholds passing)
+npm run coverage  # Coverage report (`gateway.ts` lines/statements 86.14%)
+npm run sync:openclaw-cli  # Re-apply shared-dir CLI wiring after OpenClaw upgrades
 ```
 
 ## License

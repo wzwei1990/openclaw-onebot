@@ -27,6 +27,14 @@
         "type": "string",
         "description": "Access token for OneBot API"
       },
+      "sharedDir": {
+        "type": "string",
+        "description": "Host directory mounted into NapCat for outbound media/files"
+      },
+      "containerSharedDir": {
+        "type": "string",
+        "description": "Container path corresponding to the shared host directory"
+      },
       "allowFrom": {
         "type": "array",
         "items": { "type": "string" },
@@ -56,6 +64,8 @@
             "wsUrl": { "type": "string" },
             "httpUrl": { "type": "string" },
             "accessToken": { "type": "string" },
+            "sharedDir": { "type": "string" },
+            "containerSharedDir": { "type": "string" },
             "allowFrom": {
               "type": "array",
               "items": { "type": "string" }

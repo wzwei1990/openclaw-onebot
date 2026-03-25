@@ -22,7 +22,14 @@ export async function startMockOneBotWsServer(): Promise<MockWsServer> {
     connectionUrls.push(r.url ?? '');
   });
 
-  await new Promise<void>((resolve) => wss.on('listening', () => resolve()));
+  // WebSocketServer may start listening before the caller attaches a listener.
+  // If we miss that event, gateway tests hang before the first assertion.
+  if (!wss.address()) {
+    await new Promise<void>((resolve, reject) => {
+      wss.once('listening', () => resolve());
+      wss.once('error', reject);
+    });
+  }
 
   const address = wss.address();
   if (typeof address === 'string' || !address) throw new Error('Unexpected ws address');
@@ -53,8 +60,21 @@ export async function startMockOneBotWsServer(): Promise<MockWsServer> {
       }
     },
     close: () =>
-      new Promise<void>((resolve) => {
-        wss.close(() => resolve());
+      new Promise<void>((resolve, reject) => {
+        for (const client of wss.clients) {
+          try {
+            client.terminate();
+          } catch {
+            // ignore
+          }
+        }
+        wss.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
       }),
     getClientCount: () => wss.clients.size,
   };

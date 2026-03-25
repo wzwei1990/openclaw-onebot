@@ -8,6 +8,7 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "scripts",
     "openclaw.plugin.json"
   ],
   "repository": {
@@ -49,7 +50,8 @@
     "react-test": "node ./scripts/react-test.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "sync:openclaw-cli": "node ./scripts/sync-openclaw-cli.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"

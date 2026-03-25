@@ -90,9 +90,42 @@ describe('channel plugin shape', () => {
     const apply = onebotPlugin.setup!.applyAccountConfig!;
     const res1 = apply({ cfg: {}, accountId: 'default', input: { token: 'ws://a,http://b' } } as any);
     expect((res1 as any).channels.onebot.wsUrl).toBe('ws://a');
+    expect((res1 as any).channels.onebot.sharedDir).toBe('/Users/bot/napcat/shared');
+    expect((res1 as any).channels.onebot.containerSharedDir).toBe('/shared');
     const res2 = apply({ cfg: {}, accountId: 'default', input: { token: 'ws://a,http://b,TOKEN123', name: 'QQBot' } } as any);
     expect((res2 as any).channels.onebot.accessToken).toBe('TOKEN123');
     expect((res2 as any).channels.onebot.name).toBe('QQBot');
+  });
+
+  it('setup.applyAccountConfig accepts explicit shared-dir inputs', () => {
+    const apply = onebotPlugin.setup!.applyAccountConfig!;
+    const res = apply({
+      cfg: {},
+      accountId: 'default',
+      input: {
+        token: 'ws://a,http://b',
+        sharedDir: '/tmp/napcat-shared',
+        containerSharedDir: '/napcat-shared',
+      },
+    } as any);
+
+    expect((res as any).channels.onebot.sharedDir).toBe('/tmp/napcat-shared');
+    expect((res as any).channels.onebot.containerSharedDir).toBe('/napcat-shared');
+  });
+
+  it('setup.applyAccountConfig accepts shared-dir values in token format', () => {
+    const apply = onebotPlugin.setup!.applyAccountConfig!;
+    const res = apply({
+      cfg: {},
+      accountId: 'default',
+      input: {
+        token: 'ws://a,http://b,TOKEN123,/tmp/napcat-shared,/napcat-shared',
+      },
+    } as any);
+
+    expect((res as any).channels.onebot.accessToken).toBe('TOKEN123');
+    expect((res as any).channels.onebot.sharedDir).toBe('/tmp/napcat-shared');
+    expect((res as any).channels.onebot.containerSharedDir).toBe('/napcat-shared');
   });
 
   it('actions.react sends set_msg_emoji_like using current message context', async () => {

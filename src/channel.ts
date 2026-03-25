@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ChannelPlugin } from "clawdbot/plugin-sdk";
 import type { ResolvedOneBotAccount } from "./types.js";
 import { listOneBotAccountIds, resolveOneBotAccount, applyOneBotAccountConfig } from "./config.js";
@@ -6,6 +8,8 @@ import { startGateway } from "./gateway.js";
 
 const DEFAULT_ACCOUNT_ID = "default";
 const ONEBOT_MESSAGE_ACTIONS = ["react"] as const;
+const DEFAULT_SHARED_DIR = process.env.ONEBOT_SHARED_DIR ?? join(homedir(), "napcat", "shared");
+const DEFAULT_CONTAINER_SHARED_DIR = process.env.ONEBOT_CONTAINER_SHARED_DIR ?? "/shared";
 
 export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
   id: "onebot",
@@ -60,7 +64,7 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
   setup: {
     validateInput: ({ input }) => {
       if (!input.token && !input.useEnv) {
-        return "OneBot requires --token (format: wsUrl,httpUrl[,accessToken]) or --use-env (ONEBOT_WS_URL, ONEBOT_HTTP_URL)";
+        return "OneBot requires --token (format: wsUrl,httpUrl[,accessToken[,sharedDir[,containerSharedDir]]]) or --use-env (ONEBOT_WS_URL, ONEBOT_HTTP_URL)";
       }
       return null;
     },
@@ -68,18 +72,34 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
       let wsUrl = "";
       let httpUrl = "";
       let accessToken: string | undefined;
+      const raw = input as Record<string, unknown>;
+      let sharedDir = typeof raw.sharedDir === "string" && raw.sharedDir.trim()
+        ? raw.sharedDir.trim()
+        : undefined;
+      let containerSharedDir = typeof raw.containerSharedDir === "string" && raw.containerSharedDir.trim()
+        ? raw.containerSharedDir.trim()
+        : undefined;
 
       if (input.token) {
         const parts = input.token.split(",");
-        wsUrl = parts[0] ?? "";
-        httpUrl = parts[1] ?? "";
-        accessToken = parts[2];
+        wsUrl = parts[0]?.trim() ?? "";
+        httpUrl = parts[1]?.trim() ?? "";
+        accessToken = parts[2]?.trim() || undefined;
+        sharedDir ??= parts[3]?.trim() || undefined;
+        containerSharedDir ??= parts[4]?.trim() || undefined;
+      }
+
+      if (!input.useEnv) {
+        sharedDir ??= DEFAULT_SHARED_DIR;
+        containerSharedDir ??= DEFAULT_CONTAINER_SHARED_DIR;
       }
 
       return applyOneBotAccountConfig(cfg, accountId, {
         wsUrl,
         httpUrl,
         accessToken,
+        sharedDir,
+        containerSharedDir,
         name: input.name,
       });
     },

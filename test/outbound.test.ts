@@ -1,3 +1,6 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { sendText, sendImage, sendRecord, uploadFile, reactToMessage } from '../src/outbound.js';
 import type { ResolvedOneBotAccount } from '../src/types.js';
@@ -43,7 +46,7 @@ describe('outbound', () => {
     expect(body.message[0].type).toBe('text');
   });
 
-  it('sendText: private:123 uses send_private_msg', async () => {
+  it('sendText: private target uses send_private_msg', async () => {
     (globalThis.fetch as any).mockResolvedValue({
       ok: true,
       status: 200,
@@ -58,7 +61,7 @@ describe('outbound', () => {
     expect(body.user_id).toBe(123);
   });
 
-  it('sendText: onebot:group:456 uses send_group_msg', async () => {
+  it('sendText: group target uses send_group_msg', async () => {
     (globalThis.fetch as any).mockResolvedValue({
       ok: true,
       status: 200,
@@ -73,7 +76,7 @@ describe('outbound', () => {
     expect(body.group_id).toBe(456);
   });
 
-  it('sendText: handles API retcode != 0', async () => {
+  it('sendText: handles API retcode failures', async () => {
     (globalThis.fetch as any).mockResolvedValue({
       ok: true,
       status: 200,
@@ -108,7 +111,7 @@ describe('outbound', () => {
     expect(res.error).toMatch(/missing httpUrl/);
   });
 
-  it('sendImage: adds file:// prefix if missing', async () => {
+  it('sendImage: preserves direct file uri for non-staged paths', async () => {
     (globalThis.fetch as any).mockResolvedValue({
       ok: true,
       status: 200,
@@ -140,7 +143,38 @@ describe('outbound', () => {
     expect(body.message[0].type).toBe('record');
   });
 
-  it('uploadFile: calls upload_group_file', async () => {
+  it('sendRecord: stages absolute host files into the container shared dir', async () => {
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ status: 'ok', retcode: 0, data: { message_id: 4 } }),
+    });
+
+    const root = mkdtempSync(join(tmpdir(), 'onebot-record-'));
+    const sharedDir = join(root, 'shared');
+    mkdirSync(sharedDir, { recursive: true });
+    const source = join(root, 'voice.mp3');
+    writeFileSync(source, 'voice-bytes');
+
+    await sendRecord(
+      mkAccount({ config: { sharedDir, containerSharedDir: '/shared' } as any }),
+      'private',
+      9,
+      source,
+    );
+
+    const [, init] = (globalThis.fetch as any).mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.message[0].data.file).toMatch(/^file:\/\/\/shared\/openclaw\/audio\//);
+
+    const rel = body.message[0].data.file.replace('file:///shared/', '');
+    const staged = join(sharedDir, rel);
+    expect(existsSync(staged)).toBe(true);
+    expect(readFileSync(staged, 'utf8')).toBe('voice-bytes');
+  });
+
+  it('uploadFile: calls upload_group_file with file uri', async () => {
     (globalThis.fetch as any).mockResolvedValue({
       ok: true,
       status: 200,
@@ -153,11 +187,11 @@ describe('outbound', () => {
     expect(String(url)).toMatch(/upload_group_file$/);
     const body = JSON.parse(init.body);
     expect(body.group_id).toBe(9);
-    expect(body.file).toBe('/tmp/f.zip');
+    expect(body.file).toBe('file:///tmp/f.zip');
     expect(body.name).toBe('f.zip');
   });
 
-  it('sendText: includes Authorization header when accessToken set', async () => {
+  it('sendText: includes Authorization header when accessToken is set', async () => {
     (globalThis.fetch as any).mockResolvedValue({
       ok: true,
       status: 200,
@@ -169,7 +203,8 @@ describe('outbound', () => {
     const [, init] = (globalThis.fetch as any).mock.calls[0];
     expect(init.headers.Authorization).toBe('Bearer AT');
   });
-  it('sendImage: targetType group works and prefixes file', async () => {
+
+  it('sendImage: group target preserves relative file path', async () => {
     (globalThis.fetch as any).mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: 'ok', retcode: 0, data: { message_id: 3 } }) });
     await sendImage(mkAccount(), 'group', 1, 'a.png');
     const [, init] = (globalThis.fetch as any).mock.calls[0];
@@ -179,7 +214,7 @@ describe('outbound', () => {
     expect(body.message[0].data.file).toBe('file://a.png');
   });
 
-  it('sendRecord: targetType private works without file:// prefix', async () => {
+  it('sendRecord: private target works without file prefix', async () => {
     (globalThis.fetch as any).mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: 'ok', retcode: 0, data: { message_id: 4 } }) });
     await sendRecord(mkAccount(), 'private', 9, 'a.mp3');
     const [url, init] = (globalThis.fetch as any).mock.calls[0];
@@ -190,13 +225,14 @@ describe('outbound', () => {
     expect(body.message[0].data.file).toBe('file://a.mp3');
   });
 
-  it('uploadFile: calls upload_private_file', async () => {
+  it('uploadFile: calls upload_private_file with file uri', async () => {
     (globalThis.fetch as any).mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: 'ok', retcode: 0, data: {} }) });
     await uploadFile(mkAccount(), 'private', 9, '/tmp/f.zip', 'f.zip');
     const [url, init] = (globalThis.fetch as any).mock.calls[0];
     expect(String(url)).toMatch(/upload_private_file$/);
     const body = JSON.parse(init.body);
     expect(body.user_id).toBe(9);
+    expect(body.file).toBe('file:///tmp/f.zip');
   });
 
   it('reactToMessage: calls set_msg_emoji_like', async () => {

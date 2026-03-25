@@ -56,6 +56,8 @@ export function resolveOneBotAccount(
       wsUrl: onebot?.wsUrl,
       httpUrl: onebot?.httpUrl,
       accessToken: onebot?.accessToken,
+      sharedDir: onebot?.sharedDir,
+      containerSharedDir: onebot?.containerSharedDir,
       allowFrom: onebot?.allowFrom,
       groupAutoReact: onebot?.groupAutoReact,
       groupAutoReactEmojiId: onebot?.groupAutoReactEmojiId,
@@ -106,7 +108,14 @@ export function resolveOneBotAccount(
 export function applyOneBotAccountConfig(
   cfg: OpenClawConfig,
   accountId: string,
-  input: { wsUrl?: string; httpUrl?: string; accessToken?: string; name?: string },
+  input: {
+    wsUrl?: string;
+    httpUrl?: string;
+    accessToken?: string;
+    sharedDir?: string;
+    containerSharedDir?: string;
+    name?: string;
+  },
 ): OpenClawConfig {
   const next = { ...cfg };
 
@@ -119,6 +128,8 @@ export function applyOneBotAccountConfig(
         ...(input.wsUrl ? { wsUrl: input.wsUrl } : {}),
         ...(input.httpUrl ? { httpUrl: input.httpUrl } : {}),
         ...(input.accessToken ? { accessToken: input.accessToken } : {}),
+        ...(input.sharedDir ? { sharedDir: input.sharedDir } : {}),
+        ...(input.containerSharedDir ? { containerSharedDir: input.containerSharedDir } : {}),
         ...(input.name ? { name: input.name } : {}),
       },
     };
@@ -136,6 +147,8 @@ export function applyOneBotAccountConfig(
             ...(input.wsUrl ? { wsUrl: input.wsUrl } : {}),
             ...(input.httpUrl ? { httpUrl: input.httpUrl } : {}),
             ...(input.accessToken ? { accessToken: input.accessToken } : {}),
+            ...(input.sharedDir ? { sharedDir: input.sharedDir } : {}),
+            ...(input.containerSharedDir ? { containerSharedDir: input.containerSharedDir } : {}),
             ...(input.name ? { name: input.name } : {}),
           },
         },

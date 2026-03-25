@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { startMockOneBotWsServer } from './helpers/mock-ws-server.js';
 import { createMockRuntime } from './helpers/mock-runtime.js';
 
@@ -12,23 +15,54 @@ vi.mock('../src/runtime.js', () => {
 
 // Mock outbound so gateway unit tests don't depend on real fetch/http
 const outboundCalls: any[] = [];
+const outboundMockState: {
+  sendTextError: Error | null;
+  sendImageError: Error | null;
+  sendRecordError: Error | null;
+  reactError: Error | null;
+  reactResult: { ok: boolean; error?: string } | null;
+} = {
+  sendTextError: null,
+  sendImageError: null,
+  sendRecordError: null,
+  reactError: null,
+  reactResult: null,
+};
 vi.mock('../src/outbound.js', () => {
   return {
     sendText: async (args: any) => {
+      if (outboundMockState.sendTextError) {
+        throw outboundMockState.sendTextError;
+      }
       outboundCalls.push({ kind: 'text', args });
       return { channel: 'onebot', messageId: '1' };
     },
     sendImage: async (...args: any[]) => {
+      if (outboundMockState.sendImageError) {
+        throw outboundMockState.sendImageError;
+      }
       outboundCalls.push({ kind: 'image', args });
       return { status: 'ok', retcode: 0, data: {} };
     },
     sendRecord: async (...args: any[]) => {
+      if (outboundMockState.sendRecordError) {
+        throw outboundMockState.sendRecordError;
+      }
       outboundCalls.push({ kind: 'record', args });
       return { status: 'ok', retcode: 0, data: {} };
     },
     reactToMessage: async (...args: any[]) => {
+      if (outboundMockState.reactError) {
+        throw outboundMockState.reactError;
+      }
       outboundCalls.push({ kind: 'react', args });
-      return { channel: 'onebot', ok: true, messageId: args[1], emojiId: args[2] };
+      return {
+        channel: 'onebot',
+        ok: outboundMockState.reactResult?.ok ?? true,
+        error: outboundMockState.reactResult?.error,
+        messageId: args[1],
+        emojiId: args[2],
+      };
     },
   };
 });
@@ -39,6 +73,11 @@ const WAIT_FOR_BATCH = { timeout: 5000 };
 describe('gateway', () => {
   beforeEach(() => {
     outboundCalls.length = 0;
+    outboundMockState.sendTextError = null;
+    outboundMockState.sendImageError = null;
+    outboundMockState.sendRecordError = null;
+    outboundMockState.reactError = null;
+    outboundMockState.reactResult = null;
     runtimeState = createMockRuntime({
       nextDeliverPayload: { text: 'reply-from-agent', mediaUrls: ['file:///tmp/x.png'] },
     });
@@ -424,6 +463,178 @@ describe('gateway', () => {
 
     await new Promise((r) => setTimeout(r, 50));
     expect(true).toBe(true);
+
+    ac.abort();
+    await runP;
+    await wsServer.close();
+  });
+
+  it('includes audio media payload in inbound context when local voice files are readable', async () => {
+    const mediaDir = await mkdtemp(join(tmpdir(), 'onebot-gateway-media-'));
+    const mp3Path = join(mediaDir, 'voice.mp3');
+    const wavPath = join(mediaDir, 'voice.wav');
+    await writeFile(mp3Path, Buffer.from('mock-mp3'));
+    await writeFile(wavPath, Buffer.from('mock-wav'));
+
+    const wsServer = await startMockOneBotWsServer();
+    const ac = new AbortController();
+    const { startGateway } = await import('../src/gateway.js');
+
+    let readyResolve!: () => void;
+    const readyP = new Promise<void>((r) => (readyResolve = r));
+    const runP = startGateway({
+      account: {
+        accountId: 'default',
+        enabled: true,
+        wsUrl: wsServer.wsUrl,
+        httpUrl: 'http://x',
+        config: {},
+      },
+      abortSignal: ac.signal,
+      cfg: {},
+      onReady: () => readyResolve(),
+      log: { info: () => {}, error: () => {}, debug: () => {} },
+    });
+
+    await readyP;
+
+    wsServer.sendToAll({
+      post_type: 'message',
+      message_type: 'private',
+      sub_type: 'friend',
+      message_id: 212,
+      user_id: 323,
+      message: [
+        { type: 'text', data: { text: 'voice payload' } },
+        { type: 'image', data: { url: 'http://img.local/test.png' } },
+        { type: 'record', data: { file: `file://${mp3Path}` } },
+        { type: 'record', data: { file: `file://${wavPath}` } },
+      ],
+      raw_message: 'voice payload',
+      sender: { user_id: 323, nickname: 'MediaPayload' },
+      self_id: 999,
+      time: Math.floor(Date.now() / 1000),
+    });
+
+    await vi.waitFor(() => {
+      expect(runtimeState.state.lastFinalizeArgs).not.toBeNull();
+    }, WAIT_FOR_BATCH);
+
+    expect(runtimeState.state.lastEnvelopeArgs.body).toContain('[Image: http://img.local/test.png]');
+    expect(runtimeState.state.lastEnvelopeArgs.body).toContain('<media:audio>');
+    expect(runtimeState.state.lastFinalizeArgs.MediaPath).toBe(mp3Path);
+    expect(runtimeState.state.lastFinalizeArgs.MediaPaths).toEqual([mp3Path, wavPath]);
+    expect(runtimeState.state.lastFinalizeArgs.MediaTypes).toEqual(['audio/mpeg', 'audio/wav']);
+    expect(runtimeState.state.lastFinalizeArgs.MediaUrls).toEqual([mp3Path, wavPath]);
+
+    ac.abort();
+    await runP;
+    await wsServer.close();
+    await rm(mediaDir, { recursive: true, force: true });
+  });
+
+  it('falls back to text when audio reply delivery fails', async () => {
+    outboundMockState.sendRecordError = new Error('napcat refused record');
+    runtimeState = createMockRuntime({
+      nextDeliverPayload: { mediaUrls: ['/tmp/reply-audio.mp3'] },
+    });
+
+    const wsServer = await startMockOneBotWsServer();
+    const ac = new AbortController();
+    const { startGateway } = await import('../src/gateway.js');
+
+    let readyResolve!: () => void;
+    const readyP = new Promise<void>((r) => (readyResolve = r));
+    const runP = startGateway({
+      account: {
+        accountId: 'default',
+        enabled: true,
+        wsUrl: wsServer.wsUrl,
+        httpUrl: 'http://x',
+        config: {},
+      },
+      abortSignal: ac.signal,
+      cfg: {},
+      onReady: () => readyResolve(),
+      log: { info: () => {}, error: () => {}, debug: () => {} },
+    });
+
+    await readyP;
+
+    wsServer.sendToAll({
+      post_type: 'message',
+      message_type: 'private',
+      sub_type: 'friend',
+      message_id: 213,
+      user_id: 324,
+      message: [{ type: 'text', data: { text: 'send voice back' } }],
+      raw_message: 'send voice back',
+      sender: { user_id: 324, nickname: 'AudioReplyFail' },
+      self_id: 999,
+      time: Math.floor(Date.now() / 1000),
+    });
+
+    await vi.waitFor(() => {
+      expect(outboundCalls.some((call) => call.kind === 'text')).toBe(true);
+    }, WAIT_FOR_BATCH);
+
+    expect(outboundCalls.find((call) => call.kind === 'text')?.args.text).toContain('语音回复发送失败');
+
+    ac.abort();
+    await runP;
+    await wsServer.close();
+  });
+
+  it('sends processing failure when dispatch setup throws', async () => {
+    runtimeState = createMockRuntime();
+    runtimeState.runtime.channel.reply.dispatchReplyWithBufferedBlockDispatcher = vi.fn(
+      () => {
+        throw new Error('dispatch exploded');
+      },
+    );
+
+    const wsServer = await startMockOneBotWsServer();
+    const ac = new AbortController();
+    const { startGateway } = await import('../src/gateway.js');
+
+    let readyResolve!: () => void;
+    const readyP = new Promise<void>((r) => (readyResolve = r));
+    const runP = startGateway({
+      account: {
+        accountId: 'default',
+        enabled: true,
+        wsUrl: wsServer.wsUrl,
+        httpUrl: 'http://x',
+        config: {},
+      },
+      abortSignal: ac.signal,
+      cfg: {},
+      onReady: () => readyResolve(),
+      log: { info: () => {}, error: () => {}, debug: () => {} },
+    });
+
+    await readyP;
+
+    wsServer.sendToAll({
+      post_type: 'message',
+      message_type: 'private',
+      sub_type: 'friend',
+      message_id: 214,
+      user_id: 325,
+      message: [{ type: 'text', data: { text: 'trigger outer catch' } }],
+      raw_message: 'trigger outer catch',
+      sender: { user_id: 325, nickname: 'DispatcherThrow' },
+      self_id: 999,
+      time: Math.floor(Date.now() / 1000),
+    });
+
+    await vi.waitFor(() => {
+      expect(outboundCalls.some((call) => call.kind === 'text')).toBe(true);
+    }, WAIT_FOR_BATCH);
+
+    expect(outboundCalls.find((call) => call.kind === 'text')?.args.text).toContain(
+      '[OpenClaw] Processing failed: Error: dispatch exploded',
+    );
 
     ac.abort();
     await runP;

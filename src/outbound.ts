@@ -1,4 +1,7 @@
-import type { ResolvedOneBotAccount, OneBotApiResponse, OneBotMessageSegment } from "./types.js";
+import { copyFile, mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { basename, extname, isAbsolute, join, posix, relative, sep } from 'node:path';
+import type { ResolvedOneBotAccount, OneBotApiResponse, OneBotMessageSegment } from './types.js';
 
 export interface OutboundContext {
   to: string;
@@ -16,38 +19,30 @@ export interface OutboundResult {
 }
 
 export type OneBotReactionResult = {
-  channel: "onebot";
+  channel: 'onebot';
   messageId: string | number;
   emojiId: string | number;
   ok: boolean;
   error?: string;
 };
 
-/**
- * Parse target address.
- * Formats:
- *   - private:<user_id>  -> private message
- *   - group:<group_id>   -> group message
- *   - onebot:private:<user_id>  -> with prefix
- *   - onebot:group:<group_id>   -> with prefix
- *   - raw number         -> defaults to private
- */
-function parseTarget(to: string): { type: "private" | "group"; id: number } {
-  let normalized = to.replace(/^onebot:/i, "");
+const DEFAULT_SHARED_DIR = process.env.ONEBOT_SHARED_DIR ?? join(homedir(), 'napcat', 'shared');
+const DEFAULT_CONTAINER_SHARED_DIR = process.env.ONEBOT_CONTAINER_SHARED_DIR ?? '/shared';
+const STAGED_MEDIA_DIR = 'openclaw';
+const STAGED_MEDIA_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-  if (normalized.startsWith("private:")) {
-    return { type: "private", id: Number(normalized.slice(8)) };
+function parseTarget(to: string): { type: 'private' | 'group'; id: number } {
+  const normalized = to.replace(/^onebot:/i, '');
+
+  if (normalized.startsWith('private:')) {
+    return { type: 'private', id: Number(normalized.slice(8)) };
   }
-  if (normalized.startsWith("group:")) {
-    return { type: "group", id: Number(normalized.slice(6)) };
+  if (normalized.startsWith('group:')) {
+    return { type: 'group', id: Number(normalized.slice(6)) };
   }
-  // Default to private
-  return { type: "private", id: Number(normalized) };
+  return { type: 'private', id: Number(normalized) };
 }
 
-/**
- * Call OneBot 11 HTTP API.
- */
 async function callApi(
   account: ResolvedOneBotAccount,
   endpoint: string,
@@ -55,14 +50,14 @@ async function callApi(
 ): Promise<OneBotApiResponse> {
   const url = `${account.httpUrl}/${endpoint}`;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   };
   if (account.accessToken) {
-    headers["Authorization"] = `Bearer ${account.accessToken}`;
+    headers.Authorization = `Bearer ${account.accessToken}`;
   }
 
   const response = await fetch(url, {
-    method: "POST",
+    method: 'POST',
     headers,
     body: JSON.stringify(body),
   });
@@ -74,33 +69,131 @@ async function callApi(
   return (await response.json()) as OneBotApiResponse;
 }
 
+function ensureApiSuccess(result: OneBotApiResponse, endpoint: string): OneBotApiResponse {
+  if (result.retcode !== 0 || result.status === 'failed') {
+    throw new Error(
+      `OneBot API ${endpoint} failed: ${result.retcode} ${result.message ?? result.wording ?? ''}`.trim(),
+    );
+  }
+  return result;
+}
+
 function normalizeMessageRef(value: string | number): string | number {
-  if (typeof value === "number") return value;
+  if (typeof value === 'number') return value;
   const trimmed = value.trim();
   return /^\d+$/.test(trimmed) ? Number(trimmed) : trimmed;
 }
 
-/**
- * Build a CQ message array from text, with optional media segments.
- */
+function stripFileScheme(filePath: string): string {
+  return filePath.replace(/^file:\/\//i, '');
+}
+
+function toFileUri(filePath: string): string {
+  return filePath.startsWith('file://') ? filePath : `file://${filePath}`;
+}
+
+function toPosixPath(filePath: string): string {
+  return filePath.split(sep).join('/');
+}
+
+function isWithinDir(parentDir: string, candidatePath: string): boolean {
+  const rel = relative(parentDir, candidatePath);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+function getSharedConfig(account: ResolvedOneBotAccount): { sharedDir: string; containerSharedDir: string } {
+  const raw = account.config as Record<string, unknown>;
+  const sharedDir = typeof raw.sharedDir === 'string' && raw.sharedDir.trim()
+    ? raw.sharedDir
+    : DEFAULT_SHARED_DIR;
+  const containerSharedDir = typeof raw.containerSharedDir === 'string' && raw.containerSharedDir.trim()
+    ? raw.containerSharedDir.replace(/\/+$/, '') || '/shared'
+    : DEFAULT_CONTAINER_SHARED_DIR;
+  return { sharedDir, containerSharedDir };
+}
+
+async function pruneStagedMedia(rootDir: string): Promise<void> {
+  try {
+    const entries = await readdir(rootDir, { withFileTypes: true });
+    const cutoff = Date.now() - STAGED_MEDIA_MAX_AGE_MS;
+    await Promise.all(
+      entries.map(async (entry) => {
+        const entryPath = join(rootDir, entry.name);
+        if (entry.isDirectory()) {
+          await pruneStagedMedia(entryPath);
+          return;
+        }
+        const info = await stat(entryPath);
+        if (info.mtimeMs < cutoff) {
+          await rm(entryPath, { force: true });
+        }
+      }),
+    );
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
+async function resolveNapCatMediaUri(
+  account: ResolvedOneBotAccount,
+  filePath: string,
+  kind: 'audio' | 'images' | 'files',
+): Promise<string> {
+  const normalizedPath = stripFileScheme(filePath);
+  const { sharedDir, containerSharedDir } = getSharedConfig(account);
+
+  if (normalizedPath.startsWith(`${containerSharedDir}/`) || normalizedPath === containerSharedDir) {
+    return toFileUri(normalizedPath);
+  }
+
+  if (!isAbsolute(normalizedPath)) {
+    return toFileUri(filePath);
+  }
+
+  try {
+    await stat(normalizedPath);
+  } catch {
+    return toFileUri(filePath);
+  }
+
+  if (isWithinDir(sharedDir, normalizedPath)) {
+    const rel = toPosixPath(relative(sharedDir, normalizedPath));
+    return toFileUri(posix.join(containerSharedDir, rel));
+  }
+
+  const stagedDir = join(sharedDir, STAGED_MEDIA_DIR, kind);
+  await mkdir(stagedDir, { recursive: true });
+
+  const ext = extname(normalizedPath);
+  const base = basename(normalizedPath, ext)
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64) || 'media';
+  const stagedName = `${Date.now()}-${base}${ext || ''}`;
+  const stagedPath = join(stagedDir, stagedName);
+  await copyFile(normalizedPath, stagedPath);
+
+  void pruneStagedMedia(join(sharedDir, STAGED_MEDIA_DIR));
+
+  const rel = toPosixPath(relative(sharedDir, stagedPath));
+  return toFileUri(posix.join(containerSharedDir, rel));
+}
+
 function buildMessage(text: string): OneBotMessageSegment[] {
   const segments: OneBotMessageSegment[] = [];
 
   if (text.trim()) {
-    segments.push({ type: "text", data: { text } });
+    segments.push({ type: 'text', data: { text } });
   }
 
   return segments;
 }
 
-/**
- * Send a text message via OneBot 11 HTTP API.
- */
 export async function sendText(ctx: OutboundContext): Promise<OutboundResult> {
   const { to, text, account } = ctx;
 
   if (!account.httpUrl) {
-    return { channel: "onebot", error: "OneBot not configured (missing httpUrl)" };
+    return { channel: 'onebot', error: 'OneBot not configured (missing httpUrl)' };
   }
 
   try {
@@ -109,13 +202,13 @@ export async function sendText(ctx: OutboundContext): Promise<OutboundResult> {
 
     let result: OneBotApiResponse;
 
-    if (target.type === "private") {
-      result = await callApi(account, "send_private_msg", {
+    if (target.type === 'private') {
+      result = await callApi(account, 'send_private_msg', {
         user_id: target.id,
         message,
       });
     } else {
-      result = await callApi(account, "send_group_msg", {
+      result = await callApi(account, 'send_group_msg', {
         group_id: target.id,
         message,
       });
@@ -123,83 +216,74 @@ export async function sendText(ctx: OutboundContext): Promise<OutboundResult> {
 
     if (result.retcode !== 0) {
       return {
-        channel: "onebot",
-        error: `OneBot API returned error: ${result.retcode} ${result.message ?? result.wording ?? ""}`,
+        channel: 'onebot',
+        error: `OneBot API returned error: ${result.retcode} ${result.message ?? result.wording ?? ''}`,
       };
     }
 
     const data = result.data as { message_id?: number } | null;
     return {
-      channel: "onebot",
+      channel: 'onebot',
       messageId: data?.message_id != null ? String(data.message_id) : undefined,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { channel: "onebot", error: message };
+    return { channel: 'onebot', error: message };
   }
 }
 
-/**
- * Send an image via OneBot 11 HTTP API.
- */
 export async function sendImage(
   account: ResolvedOneBotAccount,
-  targetType: "private" | "group",
+  targetType: 'private' | 'group',
   targetId: number,
   filePath: string,
 ): Promise<OneBotApiResponse> {
+  const mediaUri = await resolveNapCatMediaUri(account, filePath, 'images');
   const message: OneBotMessageSegment[] = [
-    { type: "image", data: { file: filePath.startsWith("file://") ? filePath : `file://${filePath}` } },
+    { type: 'image', data: { file: mediaUri } },
   ];
 
-  const endpoint = targetType === "private" ? "send_private_msg" : "send_group_msg";
-  const idField = targetType === "private" ? "user_id" : "group_id";
+  const endpoint = targetType === 'private' ? 'send_private_msg' : 'send_group_msg';
+  const idField = targetType === 'private' ? 'user_id' : 'group_id';
 
-  return callApi(account, endpoint, { [idField]: targetId, message });
+  return ensureApiSuccess(await callApi(account, endpoint, { [idField]: targetId, message }), endpoint);
 }
 
-/**
- * Send a voice/record via OneBot 11 HTTP API.
- */
 export async function sendRecord(
   account: ResolvedOneBotAccount,
-  targetType: "private" | "group",
+  targetType: 'private' | 'group',
   targetId: number,
   filePath: string,
 ): Promise<OneBotApiResponse> {
+  const mediaUri = await resolveNapCatMediaUri(account, filePath, 'audio');
   const message: OneBotMessageSegment[] = [
-    { type: "record", data: { file: filePath.startsWith("file://") ? filePath : `file://${filePath}` } },
+    { type: 'record', data: { file: mediaUri } },
   ];
 
-  const endpoint = targetType === "private" ? "send_private_msg" : "send_group_msg";
-  const idField = targetType === "private" ? "user_id" : "group_id";
+  const endpoint = targetType === 'private' ? 'send_private_msg' : 'send_group_msg';
+  const idField = targetType === 'private' ? 'user_id' : 'group_id';
 
-  return callApi(account, endpoint, { [idField]: targetId, message });
+  return ensureApiSuccess(await callApi(account, endpoint, { [idField]: targetId, message }), endpoint);
 }
 
-/**
- * Upload a file via OneBot 11 HTTP API.
- */
 export async function uploadFile(
   account: ResolvedOneBotAccount,
-  targetType: "private" | "group",
+  targetType: 'private' | 'group',
   targetId: number,
   filePath: string,
   fileName: string,
 ): Promise<OneBotApiResponse> {
-  const endpoint = targetType === "private" ? "upload_private_file" : "upload_group_file";
-  const idField = targetType === "private" ? "user_id" : "group_id";
+  const mediaUri = await resolveNapCatMediaUri(account, filePath, 'files');
+  const endpoint = targetType === 'private' ? 'upload_private_file' : 'upload_group_file';
+  const idField = targetType === 'private' ? 'user_id' : 'group_id';
 
-  return callApi(account, endpoint, {
+  return ensureApiSuccess(await callApi(account, endpoint, {
     [idField]: targetId,
-    file: filePath,
+    file: mediaUri,
     name: fileName,
-  });
+  }), endpoint);
 }
 
-/**
- * React to a message via NapCat / OneBot 11.
- */
 export async function reactToMessage(
   account: ResolvedOneBotAccount,
   messageId: string | number,
@@ -207,32 +291,32 @@ export async function reactToMessage(
 ): Promise<OneBotReactionResult> {
   if (!account.httpUrl) {
     return {
-      channel: "onebot",
+      channel: 'onebot',
       messageId,
       emojiId,
       ok: false,
-      error: "OneBot not configured (missing httpUrl)",
+      error: 'OneBot not configured (missing httpUrl)',
     };
   }
 
   try {
-    const result = await callApi(account, "set_msg_emoji_like", {
+    const result = await callApi(account, 'set_msg_emoji_like', {
       message_id: normalizeMessageRef(messageId),
       emoji_id: normalizeMessageRef(emojiId),
     });
 
     if (result.retcode !== 0) {
       return {
-        channel: "onebot",
+        channel: 'onebot',
         messageId,
         emojiId,
         ok: false,
-        error: `OneBot API returned error: ${result.retcode} ${result.message ?? result.wording ?? ""}`.trim(),
+        error: `OneBot API returned error: ${result.retcode} ${result.message ?? result.wording ?? ''}`.trim(),
       };
     }
 
     return {
-      channel: "onebot",
+      channel: 'onebot',
       messageId,
       emojiId,
       ok: true,
@@ -240,7 +324,7 @@ export async function reactToMessage(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
-      channel: "onebot",
+      channel: 'onebot',
       messageId,
       emojiId,
       ok: false,

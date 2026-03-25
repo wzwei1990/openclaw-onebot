@@ -10,6 +10,10 @@ export interface OneBotAccountConfig {
   httpUrl?: string;
   /** Optional access token for authentication */
   accessToken?: string;
+  /** Host directory mounted into the NapCat container for outbound files */
+  sharedDir?: string;
+  /** Container path that maps to the shared host directory */
+  containerSharedDir?: string;
   /** Whitelist of allowed senders, e.g. ["private:12345", "group:67890", "*"] */
   allowFrom?: string[];
   /** Automatically react to inbound group messages */

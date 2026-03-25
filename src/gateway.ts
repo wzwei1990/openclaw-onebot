@@ -511,6 +511,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
                 );
 
                 let replyText = payload.text ?? "";
+                let audioSendFailed = false;
 
                 const mediaPaths: string[] = [];
                 if (payload.mediaUrls?.length) mediaPaths.push(...payload.mediaUrls);
@@ -520,20 +521,29 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
                 const AUDIO_EXTS = new Set([".mp3", ".ogg", ".wav", ".m4a", ".flac", ".aac", ".opus", ".amr", ".silk"]);
                 for (const mediaPath of mediaPaths) {
+                  const ext = mediaPath.toLowerCase().replace(/.*(\.[^.]+)$/, "$1");
                   try {
                     const targetType = isGroup ? "group" as const : "private" as const;
                     const targetId = isGroup ? event.group_id! : event.user_id;
-                    const ext = mediaPath.toLowerCase().replace(/.*(\.[^.]+)$/, "$1");
                     if (AUDIO_EXTS.has(ext)) {
-                      await sendRecord(account, targetType, targetId, mediaPath);
-                      log?.info(`[onebot:${account.accountId}] Sent voice: ${mediaPath}`);
+                      const result = await sendRecord(account, targetType, targetId, mediaPath);
+                      const sentId = (result.data as { message_id?: number } | null)?.message_id;
+                      log?.info(`[onebot:${account.accountId}] Sent voice: ${mediaPath}${sentId != null ? ` message_id=${sentId}` : ''}`);
                     } else {
-                      await sendImage(account, targetType, targetId, mediaPath);
-                      log?.info(`[onebot:${account.accountId}] Sent media: ${mediaPath}`);
+                      const result = await sendImage(account, targetType, targetId, mediaPath);
+                      const sentId = (result.data as { message_id?: number } | null)?.message_id;
+                      log?.info(`[onebot:${account.accountId}] Sent media: ${mediaPath}${sentId != null ? ` message_id=${sentId}` : ''}`);
                     }
                   } catch (err) {
+                    if (AUDIO_EXTS.has(ext)) {
+                      audioSendFailed = true;
+                    }
                     log?.error(`[onebot:${account.accountId}] Media send failed: ${err}`);
                   }
+                }
+
+                if (audioSendFailed && !replyText.trim()) {
+                  replyText = '[OpenClaw] 语音回复发送失败，已切换为文本提醒。';
                 }
 
                 if (replyText.trim()) {

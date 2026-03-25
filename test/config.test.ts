@@ -58,17 +58,38 @@ describe('config', () => {
     expect(acct.wsUrl).toBe('ws://a');
   });
 
+  it('resolveOneBotAccount: shared dirs are passed through', () => {
+    const cfg = {
+      channels: {
+        onebot: {
+          wsUrl: 'ws://x',
+          httpUrl: 'http://y',
+          sharedDir: '/tmp/napcat-shared',
+          containerSharedDir: '/napcat-shared',
+        },
+      },
+    };
+
+    const acct = resolveOneBotAccount(cfg as any, 'default');
+    expect(acct.config.sharedDir).toBe('/tmp/napcat-shared');
+    expect(acct.config.containerSharedDir).toBe('/napcat-shared');
+  });
+
   it('applyOneBotAccountConfig: default account updates channels.onebot', () => {
     const next = applyOneBotAccountConfig({} as any, 'default', {
       wsUrl: 'ws://x',
       httpUrl: 'http://y',
       accessToken: 't',
+      sharedDir: '/tmp/napcat-shared',
+      containerSharedDir: '/napcat-shared',
       name: 'n',
     });
 
     expect((next as any).channels.onebot.wsUrl).toBe('ws://x');
     expect((next as any).channels.onebot.httpUrl).toBe('http://y');
     expect((next as any).channels.onebot.accessToken).toBe('t');
+    expect((next as any).channels.onebot.sharedDir).toBe('/tmp/napcat-shared');
+    expect((next as any).channels.onebot.containerSharedDir).toBe('/napcat-shared');
     expect((next as any).channels.onebot.name).toBe('n');
     expect((next as any).channels.onebot.enabled).toBe(true);
   });
@@ -77,10 +98,14 @@ describe('config', () => {
     const next = applyOneBotAccountConfig({} as any, 'acct1', {
       wsUrl: 'ws://a',
       httpUrl: 'http://a',
+      sharedDir: '/tmp/napcat-shared',
+      containerSharedDir: '/napcat-shared',
     });
 
     expect((next as any).channels.onebot.accounts.acct1.wsUrl).toBe('ws://a');
     expect((next as any).channels.onebot.accounts.acct1.httpUrl).toBe('http://a');
+    expect((next as any).channels.onebot.accounts.acct1.sharedDir).toBe('/tmp/napcat-shared');
+    expect((next as any).channels.onebot.accounts.acct1.containerSharedDir).toBe('/napcat-shared');
   });
 
   it('applyOneBotAccountConfig: partial update keeps old values', () => {
@@ -90,6 +115,8 @@ describe('config', () => {
           wsUrl: 'ws://old',
           httpUrl: 'http://old',
           accessToken: 'old',
+          sharedDir: '/tmp/old-shared',
+          containerSharedDir: '/old-shared',
         },
       },
     };
@@ -98,6 +125,8 @@ describe('config', () => {
     expect((next as any).channels.onebot.wsUrl).toBe('ws://new');
     expect((next as any).channels.onebot.httpUrl).toBe('http://old');
     expect((next as any).channels.onebot.accessToken).toBe('old');
+    expect((next as any).channels.onebot.sharedDir).toBe('/tmp/old-shared');
+    expect((next as any).channels.onebot.containerSharedDir).toBe('/old-shared');
   });
   it('resolveOneBotAccount: ignores env if explicitly configured', () => {
     process.env.ONEBOT_WS_URL = 'ws://env';
