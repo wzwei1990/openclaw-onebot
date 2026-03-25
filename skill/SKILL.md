@@ -1,6 +1,6 @@
 ---
 name: openclaw-onebot
-description: OneBot 11 channel plugin for QQ via NapCat/go-cqhttp. Native OpenClaw integration for private and group chat, group reactions, block streaming, voice pipeline, and allowFrom routing.
+description: OneBot 11 channel plugin for QQ via NapCat/go-cqhttp. Native OpenClaw integration for private and group chat, group reactions, block streaming, voice pipeline, and allowFrom routing. 106 tests passing.
 ---
 
 # OpenClaw OneBot 11 Channel Plugin
@@ -34,7 +34,8 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 - `allowFrom` 来源过滤
 - WebSocket 自动重连
 - OpenClaw 文本命令全支持（`/status`、`/help`、`/commands`、`/model`、`/new`、`/reset` 等）
-- 80 个测试用例通过
+- 106 个测试用例通过
+- 覆盖率：Statements/Lines 92.11%，Branches 83.68%，Functions 95.16%
 
 ### 为什么选它
 
@@ -174,7 +175,8 @@ Notes:
 - Attachments for images, voice, and files
 - `allowFrom` filtering
 - WebSocket auto-reconnect
-- 80 tests passing
+- 106 tests passing
+- Coverage: Statements/Lines 92.11%, Branches 83.68%, Functions 95.16%
 
 ### Why choose it
 
