@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { ChannelPlugin } from "clawdbot/plugin-sdk";
+import type { ChannelPlugin } from "openclaw/plugin-sdk/core";
 import type { ResolvedOneBotAccount } from "./types.js";
 import { listOneBotAccountIds, resolveOneBotAccount, applyOneBotAccountConfig } from "./config.js";
 import { reactToMessage, sendText } from "./outbound.js";
@@ -10,6 +10,13 @@ const DEFAULT_ACCOUNT_ID = "default";
 const ONEBOT_MESSAGE_ACTIONS = ["react"] as const;
 const DEFAULT_SHARED_DIR = process.env.ONEBOT_SHARED_DIR ?? join(homedir(), "napcat", "shared");
 const DEFAULT_CONTAINER_SHARED_DIR = process.env.ONEBOT_CONTAINER_SHARED_DIR ?? "/shared";
+
+function createActionResult<TDetails>(text: string, details: TDetails) {
+  return {
+    content: [{ type: "text" as const, text }],
+    details,
+  };
+}
 
 export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
   id: "onebot",
@@ -110,10 +117,15 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
     sendText: async ({ to, text, accountId, replyToId, cfg }) => {
       const account = resolveOneBotAccount(cfg, accountId);
       const result = await sendText({ to, text, accountId, replyToId, account });
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      if (!result.messageId) {
+        throw new Error("OneBot sendText did not return a messageId");
+      }
       return {
         channel: "onebot",
         messageId: result.messageId,
-        error: result.error ? new Error(result.error) : undefined,
       };
     },
   },
@@ -127,15 +139,15 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
         actions: [...ONEBOT_MESSAGE_ACTIONS],
       };
     },
-    listActions: () => ["react"],
     supportsAction: ({ action }) => action === "react",
     handleAction: async ({ action, cfg, params, accountId, toolContext }) => {
       if (action !== "react") {
-        return {
+        return createActionResult(`Unsupported OneBot action: ${action}`, {
           ok: false,
+          channel: "onebot",
+          action,
           error: `Unsupported OneBot action: ${action}`,
-          content: [{ type: "text", text: `Unsupported OneBot action: ${action}` }],
-        };
+        });
       }
 
       const messageId =
@@ -150,40 +162,36 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
         params.reaction;
 
       if (messageId == null || emojiId == null || String(emojiId).trim() === "") {
-        return {
-          ok: false,
-          error: "OneBot react requires `emoji` and `message_id` (or current message context).",
-          content: [
-            {
-              type: "text",
-              text: "OneBot react requires `emoji` and `message_id` (or current message context).",
-            },
-          ],
-        };
+        return createActionResult(
+          "OneBot react requires `emoji` and `message_id` (or current message context).",
+          {
+            ok: false,
+            channel: "onebot",
+            action,
+            error: "OneBot react requires `emoji` and `message_id` (or current message context).",
+          },
+        );
       }
 
       const account = resolveOneBotAccount(cfg, accountId);
       const result = await reactToMessage(account, messageId as string | number, emojiId as string | number);
 
       if (!result.ok) {
-        return {
+        return createActionResult(result.error ?? "OneBot reaction failed", {
           ok: false,
+          channel: "onebot",
+          action,
           error: result.error ?? "OneBot reaction failed",
-          content: [{ type: "text", text: result.error ?? "OneBot reaction failed" }],
           data: result,
-        };
+        });
       }
 
-      return {
+      return createActionResult(`Reacted with ${String(emojiId)} to message ${String(messageId)}.`, {
         ok: true,
+        channel: "onebot",
+        action,
         data: result,
-        content: [
-          {
-            type: "text",
-            text: `Reacted with ${String(emojiId)} to message ${String(messageId)}.`,
-          },
-        ],
-      };
+      });
     },
   },
   gateway: {

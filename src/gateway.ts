@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
 import type {
   ResolvedOneBotAccount,
   OneBotEvent,
@@ -32,7 +33,7 @@ const EXEC_PATH = `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH || "/usr/
 export interface GatewayContext {
   account: ResolvedOneBotAccount;
   abortSignal: AbortSignal;
-  cfg: unknown;
+  cfg: OpenClawConfig;
   onReady?: (data: unknown) => void;
   onError?: (error: Error) => void;
   log?: {
@@ -228,7 +229,7 @@ interface ChatBatch {
 
 export function resolveInboundCommandAuthorization(params: {
   pluginRuntime: ReturnType<typeof getOneBotRuntime>;
-  cfg: Record<string, unknown>;
+  cfg: OpenClawConfig;
   allowFrom?: string[];
   peerId: string;
 }): boolean {
@@ -244,7 +245,7 @@ export function resolveInboundCommandAuthorization(params: {
   }
 
   return resolveCommandAuthorized({
-    useAccessGroups: (cfg as { commands?: { useAccessGroups?: boolean } }).commands?.useAccessGroups !== false,
+    useAccessGroups: cfg.commands?.useAccessGroups !== false,
     authorizers: [
       {
         configured: hasAllowFrom,
@@ -384,7 +385,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
           channel: "onebot",
           accountId: account.accountId,
           peer: {
-            kind: isGroup ? "group" : "dm",
+            kind: isGroup ? "group" : "direct",
             id: peerId,
           },
         });
@@ -429,7 +430,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
         const toAddress = fromAddress;
         const commandAuthorized = resolveInboundCommandAuthorization({
           pluginRuntime,
-          cfg: cfg as Record<string, unknown>,
+          cfg,
           allowFrom: account.allowFrom,
           peerId,
         });

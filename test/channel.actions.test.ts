@@ -33,7 +33,6 @@ describe('channel actions', () => {
         },
       },
     } as any)).toEqual({ actions: ['react'] });
-    expect(onebotPlugin.actions?.listActions()).toEqual(['react']);
     expect(onebotPlugin.actions?.supportsAction?.({ action: 'react' } as any)).toBe(true);
     expect(onebotPlugin.actions?.supportsAction?.({ action: 'wave' } as any)).toBe(false);
   });
@@ -52,8 +51,8 @@ describe('channel actions', () => {
       accountId: 'default',
       toolContext: {},
     } as any);
-    expect(unsupported.ok).toBe(false);
-    expect(String(unsupported.error)).toMatch(/Unsupported OneBot action/);
+    expect(unsupported.details).toMatchObject({ ok: false, channel: 'onebot', action: 'wave' });
+    expect(String((unsupported.details as any).error)).toMatch(/Unsupported OneBot action/);
 
     const missing = await onebotPlugin.actions!.handleAction!({
       action: 'react',
@@ -62,8 +61,8 @@ describe('channel actions', () => {
       accountId: 'default',
       toolContext: {},
     } as any);
-    expect(missing.ok).toBe(false);
-    expect(String(missing.error)).toMatch(/requires `emoji` and `message_id`/);
+    expect(missing.details).toMatchObject({ ok: false, channel: 'onebot', action: 'react' });
+    expect(String((missing.details as any).error)).toMatch(/requires `emoji` and `message_id`/);
   });
 
   it('forwards successful reactions and reports failures', async () => {
@@ -91,7 +90,7 @@ describe('channel actions', () => {
       toolContext: {},
     } as any);
 
-    expect(success.ok).toBe(true);
+    expect(success.details).toMatchObject({ ok: true, channel: 'onebot', action: 'react' });
     expect(reactToMessage).toHaveBeenCalledWith(
       expect.objectContaining({ accountId: 'default' }),
       '123',
@@ -121,8 +120,8 @@ describe('channel actions', () => {
       toolContext: {},
     } as any);
 
-    expect(failure.ok).toBe(false);
-    expect(String(failure.error)).toMatch(/reaction failed/);
+    expect(failure.details).toMatchObject({ ok: false, channel: 'onebot', action: 'react' });
+    expect(String((failure.details as any).error)).toMatch(/reaction failed/);
   });
 
   it('routes outbound text through resolved OneBot accounts', async () => {
@@ -154,7 +153,6 @@ describe('channel actions', () => {
       account: expect.objectContaining({ httpUrl: 'http://127.0.0.1:3001' }),
     }));
     expect(result.messageId).toBe('out-1');
-    expect(result.error).toBeUndefined();
 
     sendText.mockResolvedValueOnce({
       channel: 'onebot',
@@ -162,7 +160,7 @@ describe('channel actions', () => {
       error: 'send failed',
     });
 
-    const failed = await onebotPlugin.outbound!.sendText!({
+    const failed = onebotPlugin.outbound!.sendText!({
       to: 'private:42',
       text: 'hello',
       accountId: 'default',
@@ -176,8 +174,7 @@ describe('channel actions', () => {
       },
     } as any);
 
-    expect(failed.error).toBeInstanceOf(Error);
-    expect(String(failed.error?.message ?? failed.error)).toMatch(/send failed/);
+    await expect(failed).rejects.toThrow(/send failed/);
   });
 
   it('builds status snapshots from runtime state', () => {

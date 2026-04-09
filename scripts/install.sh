@@ -5,26 +5,44 @@ set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PLUGIN_DIR="${OPENCLAW_HOME:-$HOME/.openclaw}/plugins/onebot"
+RELEASE_DIR="$SKILL_DIR/.clawhub-plugin/openclaw-onebot-plugin"
 
 echo "📦 Installing OpenClaw OneBot plugin..."
 
-# 创建插件目录
+# 先在源码仓库完成构建，再把运行时 dist 安装到 OpenClaw 插件目录
+if [ ! -d "$SKILL_DIR/node_modules" ]; then
+  echo "📥 Installing build dependencies in source repo..."
+  (cd "$SKILL_DIR" && npm ci)
+fi
+
+echo "📦 Preparing release payload..."
+(cd "$SKILL_DIR" && npm run prepare:clawhub:plugin)
+
+# 创建插件目录并清理旧文件，避免残留源码安装时代的兼容文件
 mkdir -p "$PLUGIN_DIR"
+rm -rf "$PLUGIN_DIR"/src "$PLUGIN_DIR"/scripts "$PLUGIN_DIR"/dist
+rm -f \
+  "$PLUGIN_DIR"/index.ts \
+  "$PLUGIN_DIR"/setup-entry.ts \
+  "$PLUGIN_DIR"/tsconfig.json \
+  "$PLUGIN_DIR"/package.json \
+  "$PLUGIN_DIR"/package-lock.json \
+  "$PLUGIN_DIR"/openclaw.plugin.json \
+  "$PLUGIN_DIR"/README.md \
+  "$PLUGIN_DIR"/LICENSE
 
-# 复制源码
-cp -r "$SKILL_DIR"/src "$PLUGIN_DIR"/
-cp -r "$SKILL_DIR"/scripts "$PLUGIN_DIR"/
-cp "$SKILL_DIR"/index.ts "$PLUGIN_DIR"/
-cp "$SKILL_DIR"/package.json "$PLUGIN_DIR"/
-cp "$SKILL_DIR"/package-lock.json "$PLUGIN_DIR"/
-cp "$SKILL_DIR"/openclaw.plugin.json "$PLUGIN_DIR"/
-cp "$SKILL_DIR"/tsconfig.json "$PLUGIN_DIR"/
+# 复制精简后的发布产物
+cp -r "$RELEASE_DIR"/dist "$PLUGIN_DIR"/
+cp -r "$RELEASE_DIR"/scripts "$PLUGIN_DIR"/
+cp "$RELEASE_DIR"/package.json "$PLUGIN_DIR"/
+cp "$RELEASE_DIR"/openclaw.plugin.json "$PLUGIN_DIR"/
+cp "$RELEASE_DIR"/README.md "$PLUGIN_DIR"/
+cp "$RELEASE_DIR"/LICENSE "$PLUGIN_DIR"/
 
-# 安装依赖并编译
+# 安装运行时依赖；显式跳过 peer 依赖，并关闭 audit/lockfile/fund，避免插件安装拖尾
 cd "$PLUGIN_DIR"
-npm install --omit=dev 2>/dev/null
-npm run build 2>/dev/null
-node "$SKILL_DIR/scripts/sync-openclaw-cli.mjs" 2>/dev/null || echo "⚠️  OpenClaw CLI sync skipped; run npm run sync:openclaw-cli if needed."
+npm install --omit=dev --omit=peer --no-package-lock --no-audit --no-fund
+node "$PLUGIN_DIR/scripts/sync-openclaw-cli.mjs" 2>/dev/null || echo "⚠️  OpenClaw CLI sync skipped; run npm run sync:openclaw-cli if needed."
 
 echo "✅ OneBot plugin installed to $PLUGIN_DIR"
 echo ""

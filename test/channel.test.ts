@@ -3,8 +3,6 @@ import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { onebotPlugin } from '../src/channel.js';
 
-// Note: ChannelPlugin is type-only in src, so runtime import doesn't require clawdbot/plugin-sdk.
-
 describe('channel plugin shape', () => {
   const oldFetch = globalThis.fetch;
   const defaultSharedDir = process.env.ONEBOT_SHARED_DIR ?? join(homedir(), 'napcat', 'shared');
@@ -153,7 +151,7 @@ describe('channel plugin shape', () => {
       toolContext: { currentMessageId: '5566' },
     } as any);
 
-    expect(result.ok).toBe(true);
+    expect(result.details).toMatchObject({ ok: true, channel: 'onebot', action: 'react' });
     const [url, init] = (globalThis.fetch as any).mock.calls[0];
     expect(String(url)).toMatch(/set_msg_emoji_like$/);
     const body = JSON.parse(init.body);
@@ -169,7 +167,7 @@ describe('channel plugin shape', () => {
       toolContext: {},
     } as any);
 
-    expect(result.ok).toBe(false);
-    expect(String(result.error)).toMatch(/emoji/);
+    expect(result.details).toMatchObject({ ok: false, channel: 'onebot', action: 'react' });
+    expect(String((result.details as any).error)).toMatch(/emoji/);
   });
 });

@@ -1,6 +1,6 @@
 ---
 name: openclaw-onebot
-description: "OneBot 11 channel plugin for QQ messaging (NapCat/go-cqhttp). Native OpenClaw integration with private/group chat, group reactions, block streaming, voice pipeline, message batching, allowFrom filtering, shared-dir media staging, and full text-command passthrough. 106 tests."
+description: "OneBot 11 channel plugin for QQ messaging (NapCat/go-cqhttp). Native OpenClaw integration with private/group chat, group reactions, block streaming, voice pipeline, message batching, allowFrom filtering, shared-dir media staging, and full text-command passthrough. 112 tests."
 metadata:
   openclaw:
     emoji: "🐧"
@@ -29,6 +29,7 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 - 通道 `id` 仍然是 `onebot`
 - 因此 `plugins.allow` / `plugins.entries` / `plugins.installs` 使用 `openclaw-onebot`
 - `channels.onebot` 保持不变
+- 当前版本对齐 OpenClaw `2026.4.9` / plugin-sdk `2026.4.9`，并声明 `setupEntry`
 
 ### 功能
 
@@ -44,8 +45,8 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 - 🔄 WebSocket 自动重连（指数退避）
 - 🔒 可选 access token 鉴权
 - 🎯 `allowFrom` 消息来源过滤（私聊/群聊/用户级别）
-- ✅ 106 个测试用例全部通过
-- 📈 覆盖率：Statements/Lines 92.11%，Branches 83.68%，Functions 95.16%；`gateway.ts` Statements/Lines 86.14%
+- ✅ 112 个测试用例全部通过
+- 📈 覆盖率：Statements/Lines 91.97%，Branches 83.37%，Functions 95.00%；`gateway.ts` Statements/Lines 86.14%
 
 ### 与其他方案对比
 
@@ -59,7 +60,7 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 | **语音支持** | ✅ SILK/AMR → MP3 → STT/TTS 全自动 | ❌ 无 | ❌ 无 |
 | **消息聚合** | ✅ 1.5s 智能合并 | ❌ 无 | ❌ 无 |
 | **自动重连** | ✅ WebSocket 指数退避 | daemon 脚本重启 | ❌ 无 |
-| **测试覆盖** | ✅ 106 tests | ❌ 无 | ❌ 无 |
+| **测试覆盖** | ✅ 112 tests | ❌ 无 | ❌ 无 |
 | **需要额外进程** | ❌ 随 gateway 启动 | ✅ 需独立运行 daemon | ✅ 需独立运行 listener |
 
 **核心区别**：本项目是 OpenClaw **原生通道插件**，安装后 QQ 就和 Discord / Telegram 一样使用，不需要额外的桥接脚本或消息队列。
@@ -72,12 +73,14 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 # 自动安装
 bash scripts/install.sh
 
-# 或手动
-cp -r src scripts index.ts package.json package-lock.json openclaw.plugin.json tsconfig.json ~/.openclaw/plugins/onebot/
-cd ~/.openclaw/plugins/onebot && npm install && npm run build
+# 或手动（先在仓库根目录准备发布包）
+npm install && npm run prepare:clawhub:plugin
+mkdir -p ~/.openclaw/plugins/onebot
+cp -r .clawhub-plugin/openclaw-onebot-plugin/* ~/.openclaw/plugins/onebot/
+cd ~/.openclaw/plugins/onebot && npm install --omit=dev --omit=peer --no-package-lock --no-audit --no-fund
 ```
 
-`scripts/install.sh` 会在编译完成后自动尝试执行 `scripts/sync-openclaw-cli.mjs`，把 `--shared-dir` / `--container-shared-dir` 接到本机 OpenClaw CLI。
+`scripts/install.sh` 会先在源码仓库生成 `.clawhub-plugin/openclaw-onebot-plugin` 精简发布包，再把这份运行时 payload 安装到 OpenClaw 目录，并自动尝试执行 `scripts/sync-openclaw-cli.mjs`，把 `--shared-dir` / `--container-shared-dir` 接到本机 OpenClaw CLI。
 
 #### 2. 配置
 
@@ -240,7 +243,7 @@ npm run react-test -- --message-id <message_id> --emoji 76
 
 ```bash
 npm install
-npm test          # 106 tests
+npm test          # 112 tests
 npm run build     # 编译 TypeScript
 npm run coverage  # 覆盖率报告（`gateway.ts` lines/statements 86.14%）
 npm run sync:openclaw-cli  # 重新同步 OpenClaw CLI 的 shared-dir 参数
@@ -259,6 +262,7 @@ Note:
 - Channel `id`: `onebot`
 - Use `openclaw-onebot` in `plugins.allow` / `plugins.entries` / `plugins.installs`
 - Keep `channels.onebot` unchanged
+- This release targets OpenClaw `2026.4.9` / plugin-sdk `2026.4.9` and declares `setupEntry`
 
 ### Features
 
@@ -274,8 +278,8 @@ Note:
 - 🔄 WebSocket auto-reconnect with exponential backoff
 - 🔒 Optional access token authentication
 - 🎯 `allowFrom` filtering (private/group/user-level)
-- ✅ 106 tests passing
-- 📈 Coverage: Statements/Lines 92.11%, Branches 83.68%, Functions 95.16%; `gateway.ts` Statements/Lines 86.14%
+- ✅ 112 tests passing
+- 📈 Coverage: Statements/Lines 91.97%, Branches 83.37%, Functions 95.00%; `gateway.ts` Statements/Lines 86.14%
 
 ### Comparison with Alternatives
 
@@ -289,7 +293,7 @@ Note:
 | **Voice** | ✅ SILK/AMR → MP3 → STT/TTS auto | ❌ None | ❌ None |
 | **Batching** | ✅ 1.5s smart merge | ❌ None | ❌ None |
 | **Auto-reconnect** | ✅ Exponential backoff | Daemon restart | ❌ None |
-| **Tests** | ✅ 106 tests | ❌ None | ❌ None |
+| **Tests** | ✅ 112 tests | ❌ None | ❌ None |
 | **Extra process** | ❌ Runs with gateway | ✅ Separate daemon | ✅ Separate listener |
 
 **Key difference**: This is a **native OpenClaw channel plugin** — once installed, QQ works just like Discord or Telegram. No bridge scripts, no message queues, no extra processes.
@@ -303,11 +307,13 @@ Note:
 bash scripts/install.sh
 
 # Or manual
-cp -r src scripts index.ts package.json package-lock.json openclaw.plugin.json tsconfig.json ~/.openclaw/plugins/onebot/
-cd ~/.openclaw/plugins/onebot && npm install && npm run build
+npm install && npm run prepare:clawhub:plugin
+mkdir -p ~/.openclaw/plugins/onebot
+cp -r .clawhub-plugin/openclaw-onebot-plugin/* ~/.openclaw/plugins/onebot/
+cd ~/.openclaw/plugins/onebot && npm install --omit=dev --omit=peer --no-package-lock --no-audit --no-fund
 ```
 
-`scripts/install.sh` also tries to run `scripts/sync-openclaw-cli.mjs` after build so the local OpenClaw CLI keeps the OneBot `--shared-dir` / `--container-shared-dir` flags wired in.
+`scripts/install.sh` prepares `.clawhub-plugin/openclaw-onebot-plugin` in the source repo first, installs that trimmed runtime payload, and then runs `scripts/sync-openclaw-cli.mjs` so the local OpenClaw CLI keeps the OneBot `--shared-dir` / `--container-shared-dir` flags wired in.
 
 #### 2. Configure
 
@@ -471,7 +477,7 @@ Skip these if you only need text and image delivery.
 
 ```bash
 npm install
-npm test          # Run 106 tests
+npm test          # Run 112 tests
 npm run build     # Compile TypeScript
 npm run coverage  # Coverage report (`gateway.ts` lines/statements 86.14%)
 npm run sync:openclaw-cli  # Re-apply shared-dir CLI wiring after OpenClaw upgrades

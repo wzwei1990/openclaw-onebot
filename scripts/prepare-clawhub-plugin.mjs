@@ -33,15 +33,10 @@ await rm(outputRoot, { recursive: true, force: true });
 await mkdir(outputRoot, { recursive: true });
 
 await cp(join(repoRoot, "dist"), join(outputRoot, "dist"), { recursive: true });
+await cp(join(repoRoot, "scripts"), join(outputRoot, "scripts"), { recursive: true });
 await cp(join(repoRoot, "LICENSE"), join(outputRoot, "LICENSE"));
 await cp(join(repoRoot, "README.md"), join(outputRoot, "README.md"));
 await cp(join(repoRoot, "openclaw.plugin.json"), join(outputRoot, "openclaw.plugin.json"));
-
-try {
-  await cp(join(repoRoot, "package-lock.json"), join(outputRoot, "package-lock.json"));
-} catch {
-  // The ClawHub package remains publishable without a lockfile.
-}
 
 await writeFile(join(outputRoot, "package.json"), `${JSON.stringify(releasePackage, null, 2)}\n`);
 

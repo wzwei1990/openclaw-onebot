@@ -1,14 +1,9 @@
-import type { PluginRuntime } from "clawdbot/plugin-sdk";
+import { createPluginRuntimeStore } from "openclaw/plugin-sdk/runtime-store";
+import type { PluginRuntime } from "openclaw/plugin-sdk/runtime-store";
 
-let runtime: PluginRuntime | null = null;
+const runtimeStore = createPluginRuntimeStore<PluginRuntime>("OneBot runtime not initialized");
 
-export function setOneBotRuntime(next: PluginRuntime) {
-  runtime = next;
-}
-
-export function getOneBotRuntime(): PluginRuntime {
-  if (!runtime) {
-    throw new Error("OneBot runtime not initialized");
-  }
-  return runtime;
-}
+export const setOneBotRuntime = runtimeStore.setRuntime;
+export const clearOneBotRuntime = runtimeStore.clearRuntime;
+export const tryGetOneBotRuntime = runtimeStore.tryGetRuntime;
+export const getOneBotRuntime = runtimeStore.getRuntime;

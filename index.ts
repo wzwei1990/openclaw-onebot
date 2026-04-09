@@ -1,21 +1,27 @@
-import type { MoltbotPluginApi } from "clawdbot/plugin-sdk";
+import { defineChannelPluginEntry } from "openclaw/plugin-sdk/core";
+import type { OpenClawPluginApi, PluginRuntime } from "openclaw/plugin-sdk/core";
 import { onebotPlugin } from "./src/channel.js";
 import { setOneBotRuntime } from "./src/runtime.js";
 
-const plugin = {
+const entry: {
+  id: string;
+  name: string;
+  description: string;
+  configSchema: NonNullable<typeof onebotPlugin.configSchema>;
+  register: (api: OpenClawPluginApi) => void;
+  channelPlugin: typeof onebotPlugin;
+  setChannelRuntime?: (runtime: PluginRuntime) => void;
+} = defineChannelPluginEntry({
   id: "openclaw-onebot",
   name: "OneBot",
   description: "OneBot 11 channel plugin (NapCat/go-cqhttp)",
-  register(api: MoltbotPluginApi) {
-    setOneBotRuntime(api.runtime);
-    api.registerChannel({ plugin: onebotPlugin });
-  },
-};
+  plugin: onebotPlugin,
+  setRuntime: setOneBotRuntime,
+});
 
-export default plugin;
-
+export default entry;
 export { onebotPlugin } from "./src/channel.js";
-export { setOneBotRuntime, getOneBotRuntime } from "./src/runtime.js";
+export { setOneBotRuntime, clearOneBotRuntime, getOneBotRuntime, tryGetOneBotRuntime } from "./src/runtime.js";
 export * from "./src/types.js";
 export * from "./src/config.js";
 export * from "./src/gateway.js";
