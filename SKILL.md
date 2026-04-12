@@ -1,6 +1,6 @@
 ---
 name: openclaw-onebot
-description: "OneBot 11 channel plugin for QQ messaging (NapCat/go-cqhttp). Native OpenClaw integration with private/group chat, group reactions, block streaming, voice pipeline, message batching, allowFrom filtering, shared-dir media staging, and full text-command passthrough. 112 tests."
+description: "OneBot 11 channel plugin for QQ messaging (NapCat/go-cqhttp). Native OpenClaw integration with private/group chat, group reactions, block streaming, voice pipeline, message batching, allowFrom filtering, shared-dir media staging, and full text-command passthrough. 116 tests."
 metadata:
   openclaw:
     emoji: "🐧"
@@ -45,25 +45,8 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 - 🔄 WebSocket 自动重连（指数退避）
 - 🔒 可选 access token 鉴权
 - 🎯 `allowFrom` 消息来源过滤（私聊/群聊/用户级别）
-- ✅ 112 个测试用例全部通过
-- 📈 覆盖率：Statements/Lines 91.97%，Branches 83.37%，Functions 95.00%；`gateway.ts` Statements/Lines 86.14%
-
-### 与其他方案对比
-
-| | **openclaw-onebot** (本项目) | **方案 A** | **方案 B** |
-|---|---|---|---|
-| **协议** | OneBot 11 (NapCat/go-cqhttp) | QQ 官方 Bot API | OneBot 11 (NapCat) |
-| **集成方式** | ✅ **ChannelPlugin 原生集成** | ❌ 独立 Python 脚本 + 文件队列 | ❌ 独立 Python 脚本 |
-| **消息路由** | OpenClaw 自动路由，`message` tool 直接用 | 文件队列读写，需手动桥接 | 手动调 Python API |
-| **Reaction** | ✅ 群聊支持，私聊不保证 | ❌ 无 | ❌ 无 |
-| **流式回复** | ✅ Block streaming 多段消息 | ❌ 无 | ❌ 无 |
-| **语音支持** | ✅ SILK/AMR → MP3 → STT/TTS 全自动 | ❌ 无 | ❌ 无 |
-| **消息聚合** | ✅ 1.5s 智能合并 | ❌ 无 | ❌ 无 |
-| **自动重连** | ✅ WebSocket 指数退避 | daemon 脚本重启 | ❌ 无 |
-| **测试覆盖** | ✅ 112 tests | ❌ 无 | ❌ 无 |
-| **需要额外进程** | ❌ 随 gateway 启动 | ✅ 需独立运行 daemon | ✅ 需独立运行 listener |
-
-**核心区别**：本项目是 OpenClaw **原生通道插件**，安装后 QQ 就和 Discord / Telegram 一样使用，不需要额外的桥接脚本或消息队列。
+- ✅ 116 个测试用例全部通过
+- 📈 覆盖率可通过 `npm run coverage` 复核
 
 ### 快速开始
 
@@ -243,9 +226,9 @@ npm run react-test -- --message-id <message_id> --emoji 76
 
 ```bash
 npm install
-npm test          # 112 tests
+npm test          # 116 tests
 npm run build     # 编译 TypeScript
-npm run coverage  # 覆盖率报告（`gateway.ts` lines/statements 86.14%）
+npm run coverage  # 覆盖率报告
 npm run sync:openclaw-cli  # 重新同步 OpenClaw CLI 的 shared-dir 参数
 ```
 
@@ -278,25 +261,8 @@ Note:
 - 🔄 WebSocket auto-reconnect with exponential backoff
 - 🔒 Optional access token authentication
 - 🎯 `allowFrom` filtering (private/group/user-level)
-- ✅ 112 tests passing
-- 📈 Coverage: Statements/Lines 91.97%, Branches 83.37%, Functions 95.00%; `gateway.ts` Statements/Lines 86.14%
-
-### Comparison with Alternatives
-
-| | **openclaw-onebot** (this) | **Solution A** | **Solution B** |
-|---|---|---|---|
-| **Protocol** | OneBot 11 (NapCat/go-cqhttp) | QQ Official Bot API | OneBot 11 (NapCat) |
-| **Integration** | ✅ **Native ChannelPlugin** | ❌ Standalone Python + file queue | ❌ Standalone Python scripts |
-| **Message routing** | Auto via OpenClaw `message` tool | Manual file I/O bridge | Manual Python API calls |
-| **Reactions** | ✅ Group chats only; private chats not reliable | ❌ None | ❌ None |
-| **Streaming replies** | ✅ Block-streamed multi-message replies | ❌ None | ❌ None |
-| **Voice** | ✅ SILK/AMR → MP3 → STT/TTS auto | ❌ None | ❌ None |
-| **Batching** | ✅ 1.5s smart merge | ❌ None | ❌ None |
-| **Auto-reconnect** | ✅ Exponential backoff | Daemon restart | ❌ None |
-| **Tests** | ✅ 112 tests | ❌ None | ❌ None |
-| **Extra process** | ❌ Runs with gateway | ✅ Separate daemon | ✅ Separate listener |
-
-**Key difference**: This is a **native OpenClaw channel plugin** — once installed, QQ works just like Discord or Telegram. No bridge scripts, no message queues, no extra processes.
+- ✅ 116 tests passing
+- 📈 Coverage can be re-generated with `npm run coverage`
 
 ### Quick Start
 
@@ -477,9 +443,9 @@ Skip these if you only need text and image delivery.
 
 ```bash
 npm install
-npm test          # Run 112 tests
+npm test          # Run 116 tests
 npm run build     # Compile TypeScript
-npm run coverage  # Coverage report (`gateway.ts` lines/statements 86.14%)
+npm run coverage  # Coverage report
 npm run sync:openclaw-cli  # Re-apply shared-dir CLI wiring after OpenClaw upgrades
 ```
 

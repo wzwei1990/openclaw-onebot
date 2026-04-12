@@ -1,21 +1,49 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, extname, isAbsolute, join, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ChannelPlugin } from "openclaw/plugin-sdk/core";
 import type { ResolvedOneBotAccount } from "./types.js";
 import { listOneBotAccountIds, resolveOneBotAccount, applyOneBotAccountConfig } from "./config.js";
-import { reactToMessage, sendText } from "./outbound.js";
+import { reactToMessage, sendImage, sendRecord, sendText, uploadFile } from "./outbound.js";
 import { startGateway } from "./gateway.js";
 
 const DEFAULT_ACCOUNT_ID = "default";
 const ONEBOT_MESSAGE_ACTIONS = ["react"] as const;
 const DEFAULT_SHARED_DIR = process.env.ONEBOT_SHARED_DIR ?? join(homedir(), "napcat", "shared");
 const DEFAULT_CONTAINER_SHARED_DIR = process.env.ONEBOT_CONTAINER_SHARED_DIR ?? "/shared";
+const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif"]);
+const AUDIO_EXTS = new Set([".mp3", ".ogg", ".wav", ".m4a", ".aac", ".flac", ".amr", ".silk", ".opus"]);
 
 function createActionResult<TDetails>(text: string, details: TDetails) {
   return {
     content: [{ type: "text" as const, text }],
     details,
   };
+}
+
+function parseTarget(to: string): { type: "private" | "group"; id: number } {
+  const normalized = to.replace(/^onebot:/i, "");
+
+  if (normalized.startsWith("private:")) {
+    return { type: "private", id: Number(normalized.slice(8)) };
+  }
+  if (normalized.startsWith("group:")) {
+    return { type: "group", id: Number(normalized.slice(6)) };
+  }
+  return { type: "private", id: Number(normalized) };
+}
+
+function resolveLocalMediaPath(mediaUrl: string): string {
+  if (!mediaUrl || !mediaUrl.trim()) {
+    throw new Error("OneBot sendMedia requires mediaUrl");
+  }
+  if (mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://")) {
+    throw new Error("OneBot sendMedia currently supports local file paths only");
+  }
+  if (mediaUrl.startsWith("file://")) {
+    return fileURLToPath(mediaUrl);
+  }
+  return isAbsolute(mediaUrl) ? mediaUrl : resolvePath(mediaUrl);
 }
 
 export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
@@ -126,6 +154,40 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
       return {
         channel: "onebot",
         messageId: result.messageId,
+      };
+    },
+    sendMedia: async ({ to, text, mediaUrl, accountId, cfg }) => {
+      const account = resolveOneBotAccount(cfg, accountId);
+      const target = parseTarget(to);
+      const mediaPath = resolveLocalMediaPath(mediaUrl ?? "");
+      const ext = extname(mediaPath).toLowerCase();
+
+      let mediaResult;
+      if (AUDIO_EXTS.has(ext)) {
+        mediaResult = await sendRecord(account, target.type, target.id, mediaPath);
+      } else if (IMAGE_EXTS.has(ext)) {
+        mediaResult = await sendImage(account, target.type, target.id, mediaPath);
+      } else {
+        mediaResult = await uploadFile(account, target.type, target.id, mediaPath, basename(mediaPath));
+      }
+
+      let textMessageId: string | undefined;
+      if ((text ?? "").trim()) {
+        const textResult = await sendText({ to, text, accountId, account });
+        if (textResult.error) {
+          throw new Error(textResult.error);
+        }
+        textMessageId = textResult.messageId;
+      }
+
+      const mediaMessageId =
+        mediaResult?.data && typeof mediaResult.data === "object" && "message_id" in mediaResult.data
+          ? String(mediaResult.data.message_id)
+          : undefined;
+
+      return {
+        channel: "onebot",
+        messageId: mediaMessageId ?? textMessageId ?? `${Date.now()}`,
       };
     },
   },

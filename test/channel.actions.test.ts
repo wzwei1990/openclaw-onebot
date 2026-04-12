@@ -1,13 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { reactToMessage, sendText } = vi.hoisted(() => ({
+const { reactToMessage, sendImage, sendRecord, sendText, uploadFile } = vi.hoisted(() => ({
   reactToMessage: vi.fn(),
+  sendImage: vi.fn(),
+  sendRecord: vi.fn(),
   sendText: vi.fn(),
+  uploadFile: vi.fn(),
 }));
 
 vi.mock('../src/outbound.js', () => ({
   reactToMessage,
+  sendImage,
+  sendRecord,
   sendText,
+  uploadFile,
 }));
 
 import { onebotPlugin } from '../src/channel.js';
@@ -15,7 +21,10 @@ import { onebotPlugin } from '../src/channel.js';
 describe('channel actions', () => {
   beforeEach(() => {
     reactToMessage.mockReset();
+    sendImage.mockReset();
+    sendRecord.mockReset();
     sendText.mockReset();
+    uploadFile.mockReset();
   });
 
   afterEach(() => {
@@ -175,6 +184,132 @@ describe('channel actions', () => {
     } as any);
 
     await expect(failed).rejects.toThrow(/send failed/);
+  });
+
+  it('routes outbound image media through sendImage and sends caption text separately', async () => {
+    sendImage.mockResolvedValueOnce({
+      status: 'ok',
+      retcode: 0,
+      data: { message_id: 99 },
+    });
+    sendText.mockResolvedValueOnce({
+      channel: 'onebot',
+      messageId: 'caption-1',
+      error: undefined,
+    });
+
+    const result = await onebotPlugin.outbound!.sendMedia!({
+      to: 'onebot:private:42',
+      text: 'caption',
+      mediaUrl: 'file:///tmp/My%20Image.png',
+      accountId: 'default',
+      cfg: {
+        channels: {
+          onebot: {
+            wsUrl: 'ws://127.0.0.1:3000',
+            httpUrl: 'http://127.0.0.1:3001',
+          },
+        },
+      },
+    } as any);
+
+    expect(sendImage).toHaveBeenCalledWith(
+      expect.objectContaining({ httpUrl: 'http://127.0.0.1:3001' }),
+      'private',
+      42,
+      '/tmp/My Image.png',
+    );
+    expect(sendText).toHaveBeenCalledWith(expect.objectContaining({
+      to: 'onebot:private:42',
+      text: 'caption',
+      account: expect.objectContaining({ httpUrl: 'http://127.0.0.1:3001' }),
+    }));
+    expect(result).toMatchObject({ channel: 'onebot', messageId: '99' });
+  });
+
+  it('routes outbound audio media through sendRecord', async () => {
+    sendRecord.mockResolvedValueOnce({
+      status: 'ok',
+      retcode: 0,
+      data: { message_id: 101 },
+    });
+
+    const result = await onebotPlugin.outbound!.sendMedia!({
+      to: 'group:77',
+      text: '',
+      mediaUrl: '/tmp/reply.m4a',
+      accountId: 'default',
+      cfg: {
+        channels: {
+          onebot: {
+            wsUrl: 'ws://127.0.0.1:3000',
+            httpUrl: 'http://127.0.0.1:3001',
+          },
+        },
+      },
+    } as any);
+
+    expect(sendRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ httpUrl: 'http://127.0.0.1:3001' }),
+      'group',
+      77,
+      '/tmp/reply.m4a',
+    );
+    expect(sendText).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ channel: 'onebot', messageId: '101' });
+  });
+
+  it('routes non-image media through uploadFile using the basename', async () => {
+    uploadFile.mockResolvedValueOnce({
+      status: 'ok',
+      retcode: 0,
+      data: {},
+    });
+
+    const result = await onebotPlugin.outbound!.sendMedia!({
+      to: 'private:42',
+      mediaUrl: '/tmp/archive/report final.pdf',
+      accountId: 'default',
+      cfg: {
+        channels: {
+          onebot: {
+            wsUrl: 'ws://127.0.0.1:3000',
+            httpUrl: 'http://127.0.0.1:3001',
+          },
+        },
+      },
+    } as any);
+
+    expect(uploadFile).toHaveBeenCalledWith(
+      expect.objectContaining({ httpUrl: 'http://127.0.0.1:3001' }),
+      'private',
+      42,
+      '/tmp/archive/report final.pdf',
+      'report final.pdf',
+    );
+    expect(result.channel).toBe('onebot');
+    expect(typeof result.messageId).toBe('string');
+  });
+
+  it('rejects remote media URLs for outbound sendMedia', async () => {
+    const attempt = onebotPlugin.outbound!.sendMedia!({
+      to: 'private:42',
+      mediaUrl: 'https://example.com/file.png',
+      accountId: 'default',
+      cfg: {
+        channels: {
+          onebot: {
+            wsUrl: 'ws://127.0.0.1:3000',
+            httpUrl: 'http://127.0.0.1:3001',
+          },
+        },
+      },
+    } as any);
+
+    await expect(attempt).rejects.toThrow(/local file paths only/);
+    expect(sendImage).not.toHaveBeenCalled();
+    expect(sendRecord).not.toHaveBeenCalled();
+    expect(uploadFile).not.toHaveBeenCalled();
   });
 
   it('builds status snapshots from runtime state', () => {
