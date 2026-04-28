@@ -13,6 +13,8 @@ This runbook covers the `openclaw-onebot` npm publication flow, GitHub releases,
 
 Keep the distribution names and runtime id distinct. The npm package stays `openclaw-onebot` so users installed from `openclaw-onebot@1.2.x` can upgrade normally. The ClawHub package payload is `openclaw-onebot-plugin`. The runtime id is used by existing OpenClaw config keys such as `plugins.allow` and `plugins.entries`.
 
+The ClawHub package staging script inlines JSON Schema references in `openclaw.plugin.json` because the ClawHub registry metadata store rejects `$`-prefixed object keys such as `$defs` and `$ref`.
+
 ## Preflight
 
 Verify credentials before cutting a release:
