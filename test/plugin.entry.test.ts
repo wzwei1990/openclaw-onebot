@@ -102,4 +102,29 @@ describe('package compatibility metadata', () => {
       expect(source, sourcePath).not.toContain('process.env');
     }
   });
+
+  it('keeps voice file reads isolated from outbound network delivery code', () => {
+    const inspectedSources = [
+      '../src/gateway.ts',
+      '../src/voice.ts',
+      '../src/voice-download.ts',
+      '../src/voice-inspect.ts',
+      '../src/voice-convert.ts',
+      '../src/outbound.ts',
+    ];
+    const fileReadPatterns = ['readFile', 'createReadStream'];
+    const outboundPatterns = ['sendOutboundText', 'sendImage', 'sendRecord', 'fetch('];
+
+    for (const sourcePath of inspectedSources) {
+      const source = readFileSync(new URL(sourcePath, import.meta.url), 'utf8');
+      const hasFileRead = fileReadPatterns.some((pattern) => source.includes(pattern));
+      const hasOutboundNetwork = outboundPatterns.some((pattern) => source.includes(pattern));
+      expect(hasFileRead && hasOutboundNetwork, sourcePath).toBe(false);
+    }
+
+    const gatewaySource = readFileSync(new URL('../src/gateway.ts', import.meta.url), 'utf8');
+    expect(gatewaySource).not.toContain('node:fs/promises');
+    expect(gatewaySource).not.toContain('node:child_process');
+    expect(gatewaySource).not.toContain('readFile');
+  });
 });

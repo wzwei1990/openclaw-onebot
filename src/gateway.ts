@@ -1,10 +1,4 @@
 import WebSocket from "ws";
-import { exec } from "node:child_process";
-import { writeFile, readFile, unlink, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { promisify } from "node:util";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
 import type {
   ResolvedOneBotAccount,
@@ -12,11 +6,19 @@ import type {
   OneBotMessageEvent,
   OneBotMessageSegment,
 } from "./types.js";
-import { withVoiceToolPath } from "./env.js";
 import { getOneBotRuntime } from "./runtime.js";
 import { reactToMessage, sendText as sendOutboundText, sendImage, sendRecord } from "./outbound.js";
-
-const execAsync = promisify(exec);
+import { cleanupVoiceFiles, processVoiceSegments } from "./voice.js";
+export {
+  cleanupVoiceFiles,
+  convertAmrToMp3,
+  convertSilkToMp3,
+  downloadVoiceFile,
+  ensureVoiceTmpDir,
+  isAmrFormat,
+  isSilkFormat,
+  processVoiceSegments,
+} from "./voice.js";
 
 // Reconnect configuration
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000, 60000];
@@ -26,9 +28,6 @@ const MAX_RECONNECT_ATTEMPTS = 100;
 const BATCH_GAP_MS = 1500;
 const BATCH_MAX_MESSAGES = 12;
 const BATCH_MAX_CHARS = 50000;
-
-// Voice processing
-const VOICE_TMP_DIR = join(tmpdir(), "openclaw-onebot-voice");
 
 export interface GatewayContext {
   account: ResolvedOneBotAccount;
@@ -61,155 +60,6 @@ export function extractImages(segments: OneBotMessageSegment[]): string[] {
 
 export function extractRecordSegments(segments: OneBotMessageSegment[]): OneBotMessageSegment[] {
   return segments.filter((seg) => seg.type === "record");
-}
-
-// ── Voice processing ──
-
-export function isSilkFormat(buf: Buffer): boolean {
-  // SILK files: optional 0x02 prefix byte, then "#!SILK"
-  const h = buf.toString("utf-8", 0, 10);
-  return h.includes("#!SILK");
-}
-
-export function isAmrFormat(buf: Buffer): boolean {
-  const h = buf.toString("utf-8", 0, 6);
-  return h.startsWith("#!AMR");
-}
-
-export async function ensureVoiceTmpDir(): Promise<void> {
-  await mkdir(VOICE_TMP_DIR, { recursive: true });
-}
-
-export async function downloadVoiceFile(
-  url: string,
-  log?: GatewayContext["log"],
-): Promise<string | null> {
-  try {
-    await ensureVoiceTmpDir();
-    const response = await fetch(url);
-    if (!response.ok) {
-      log?.error(`Voice download failed: ${response.status}`);
-      return null;
-    }
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length === 0) {
-      log?.error("Voice download returned empty file");
-      return null;
-    }
-    const suffix = isSilkFormat(buffer) ? ".silk" : isAmrFormat(buffer) ? ".amr" : ".ogg";
-    const filePath = join(
-      VOICE_TMP_DIR,
-      `voice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${suffix}`,
-    );
-    await writeFile(filePath, buffer);
-    log?.debug?.(`Downloaded voice: ${filePath} (${buffer.length} bytes)`);
-    return filePath;
-  } catch (err) {
-    log?.error(`Voice download error: ${err}`);
-    return null;
-  }
-}
-
-export async function convertSilkToMp3(
-  silkPath: string,
-  log?: GatewayContext["log"],
-): Promise<string | null> {
-  const pcmPath = silkPath.replace(/\.[^.]+$/, ".pcm");
-  const mp3Path = silkPath.replace(/\.[^.]+$/, ".mp3");
-  try {
-    // silk → pcm via pilk
-    await execAsync(
-      withVoiceToolPath(`uv run --with pilk python3 -c "import pilk; pilk.decode('${silkPath}', '${pcmPath}')"`),
-      { timeout: 15000 },
-    );
-    // pcm → mp3 (silk is typically 24000Hz mono 16-bit LE)
-    await execAsync(
-      withVoiceToolPath(`ffmpeg -y -f s16le -ar 24000 -ac 1 -i "${pcmPath}" "${mp3Path}"`),
-      { timeout: 10000 },
-    );
-    try { await unlink(pcmPath); } catch { /* ignore */ }
-    if (existsSync(mp3Path)) {
-      log?.info(`SILK → mp3 OK: ${mp3Path}`);
-      try { await unlink(silkPath); } catch { /* ignore */ }
-      return mp3Path;
-    }
-    return null;
-  } catch (err) {
-    log?.error(`SILK conversion failed: ${err}`);
-    try { await unlink(pcmPath); } catch { /* ignore */ }
-    return null;
-  }
-}
-
-export async function convertAmrToMp3(
-  amrPath: string,
-  log?: GatewayContext["log"],
-): Promise<string | null> {
-  const mp3Path = amrPath.replace(/\.[^.]+$/, ".mp3");
-  try {
-    await execAsync(
-      withVoiceToolPath(`ffmpeg -y -i "${amrPath}" -ar 16000 -ac 1 "${mp3Path}"`),
-      { timeout: 10000 },
-    );
-    if (existsSync(mp3Path)) {
-      log?.info(`AMR → mp3 OK: ${mp3Path}`);
-      try { await unlink(amrPath); } catch { /* ignore */ }
-      return mp3Path;
-    }
-    return null;
-  } catch (err) {
-    log?.error(`AMR conversion failed: ${err}`);
-    return null;
-  }
-}
-
-export async function processVoiceSegments(
-  segments: OneBotMessageSegment[],
-  log?: GatewayContext["log"],
-): Promise<{ path: string; contentType: string }[]> {
-  const results: { path: string; contentType: string }[] = [];
-  for (const seg of segments) {
-    const url = String(seg.data.url ?? seg.data.file ?? "");
-    log?.info(`[voice] segment data: url=${seg.data.url}, file=${seg.data.file}, resolved=${url.slice(0, 200)}`);
-    if (!url) continue;
-
-    let filePath: string | null = null;
-    if (url.startsWith("http")) {
-      filePath = await downloadVoiceFile(url, log);
-    } else {
-      const localPath = url.replace(/^file:\/\//, "");
-      if (existsSync(localPath)) filePath = localPath;
-    }
-    if (!filePath) continue;
-
-    try {
-      const buf = await readFile(filePath);
-      const hexHead = buf.subarray(0, 16).toString("hex");
-      log?.info(`[voice] file=${filePath} size=${buf.length} hex=${hexHead} isSilk=${isSilkFormat(buf)} isAmr=${isAmrFormat(buf)}`);
-      if (isSilkFormat(buf)) {
-        const mp3 = await convertSilkToMp3(filePath, log);
-        if (mp3) results.push({ path: mp3, contentType: "audio/mpeg" });
-      } else if (isAmrFormat(buf)) {
-        const mp3 = await convertAmrToMp3(filePath, log);
-        if (mp3) results.push({ path: mp3, contentType: "audio/mpeg" });
-      } else {
-        let ct = "audio/ogg";
-        if (filePath.endsWith(".mp3")) ct = "audio/mpeg";
-        else if (filePath.endsWith(".wav")) ct = "audio/wav";
-        else if (filePath.endsWith(".amr")) ct = "audio/amr";
-        results.push({ path: filePath, contentType: ct });
-      }
-    } catch (err) {
-      log?.error(`Voice processing error: ${err}`);
-    }
-  }
-  return results;
-}
-
-export function cleanupVoiceFiles(paths: string[]): void {
-  for (const p of paths) {
-    unlink(p).catch(() => { /* ignore */ });
-  }
 }
 
 // ── Message batching ──

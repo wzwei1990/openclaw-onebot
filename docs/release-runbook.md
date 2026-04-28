@@ -9,7 +9,7 @@ This runbook covers the `openclaw-onebot` npm publication flow, GitHub releases,
 - OpenClaw runtime manifest id: `openclaw-onebot`
 - OpenClaw channel id: `onebot`
 - ClawHub skill slug: `openclaw-onebot`
-- Current release line: `1.2.11`
+- Current release line: `1.2.12`
 
 Keep the distribution names and runtime id distinct. The npm package stays `openclaw-onebot` so users installed from `openclaw-onebot@1.2.x` can upgrade normally. The ClawHub package payload is `openclaw-onebot-plugin`. The runtime id is used by existing OpenClaw config keys such as `plugins.allow` and `plugins.entries`.
 
@@ -82,7 +82,7 @@ git push origin main "${TAG}"
 gh release create "${TAG}" --title "${TAG}" --notes-file "docs/releases/${TAG}.md"
 ```
 
-Recommended release notes source: [docs/releases/v1.2.11.md](releases/v1.2.11.md).
+Recommended release notes source: `docs/releases/v${VERSION}.md`.
 
 ## ClawHub Package Publish
 
@@ -106,7 +106,7 @@ clawhub package publish .clawhub-plugin/openclaw-onebot-plugin \
   --source-ref "v${VERSION}" \
   --source-commit "${SHA}" \
   --tags latest,openclaw,onebot,qq,napcat \
-  --changelog "Refresh OpenClaw 2026.4.26 compatibility, declare channelConfigs metadata, and preserve the stable openclaw-onebot runtime id."
+  --changelog "Isolate OneBot voice file inspection from outbound delivery code so OpenClaw deep security audit no longer flags the plugin's voice pipeline."
 ```
 
 ## ClawHub Skill Publish
@@ -126,7 +126,7 @@ clawhub publish .clawhub-skill/openclaw-onebot \
   --name "OpenClaw OneBot" \
   --version "${VERSION}" \
   --tags latest,openclaw,onebot,qq,napcat \
-  --changelog "Refresh OpenClaw OneBot setup guidance and package/plugin compatibility metadata."
+  --changelog "Document the OpenClaw OneBot security-audit cleanup and current verification flow."
 ```
 
 ## Post-Publish Checks
