@@ -1,16 +1,14 @@
-import { homedir } from "node:os";
 import { basename, extname, isAbsolute, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ChannelPlugin } from "openclaw/plugin-sdk/core";
 import type { ResolvedOneBotAccount } from "./types.js";
+import { getDefaultContainerSharedDir, getDefaultSharedDir } from "./env.js";
 import { listOneBotAccountIds, resolveOneBotAccount, applyOneBotAccountConfig } from "./config.js";
 import { reactToMessage, sendImage, sendRecord, sendText, uploadFile } from "./outbound.js";
 import { startGateway } from "./gateway.js";
 
 const DEFAULT_ACCOUNT_ID = "default";
 const ONEBOT_MESSAGE_ACTIONS = ["react"] as const;
-const DEFAULT_SHARED_DIR = process.env.ONEBOT_SHARED_DIR ?? join(homedir(), "napcat", "shared");
-const DEFAULT_CONTAINER_SHARED_DIR = process.env.ONEBOT_CONTAINER_SHARED_DIR ?? "/shared";
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif"]);
 const AUDIO_EXTS = new Set([".mp3", ".ogg", ".wav", ".m4a", ".aac", ".flac", ".amr", ".silk", ".opus"]);
 
@@ -125,8 +123,8 @@ export const onebotPlugin: ChannelPlugin<ResolvedOneBotAccount> = {
       }
 
       if (!input.useEnv) {
-        sharedDir ??= DEFAULT_SHARED_DIR;
-        containerSharedDir ??= DEFAULT_CONTAINER_SHARED_DIR;
+        sharedDir ??= getDefaultSharedDir();
+        containerSharedDir ??= getDefaultContainerSharedDir();
       }
 
       return applyOneBotAccountConfig(cfg, accountId, {

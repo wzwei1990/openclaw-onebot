@@ -12,6 +12,7 @@ import type {
   OneBotMessageEvent,
   OneBotMessageSegment,
 } from "./types.js";
+import { withVoiceToolPath } from "./env.js";
 import { getOneBotRuntime } from "./runtime.js";
 import { reactToMessage, sendText as sendOutboundText, sendImage, sendRecord } from "./outbound.js";
 
@@ -28,7 +29,6 @@ const BATCH_MAX_CHARS = 50000;
 
 // Voice processing
 const VOICE_TMP_DIR = join(tmpdir(), "openclaw-onebot-voice");
-const EXEC_PATH = `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH || "/usr/bin:/bin"}`;
 
 export interface GatewayContext {
   account: ResolvedOneBotAccount;
@@ -119,13 +119,13 @@ export async function convertSilkToMp3(
   try {
     // silk → pcm via pilk
     await execAsync(
-      `uv run --with pilk python3 -c "import pilk; pilk.decode('${silkPath}', '${pcmPath}')"`,
-      { env: { ...process.env, PATH: EXEC_PATH }, timeout: 15000 },
+      withVoiceToolPath(`uv run --with pilk python3 -c "import pilk; pilk.decode('${silkPath}', '${pcmPath}')"`),
+      { timeout: 15000 },
     );
     // pcm → mp3 (silk is typically 24000Hz mono 16-bit LE)
     await execAsync(
-      `ffmpeg -y -f s16le -ar 24000 -ac 1 -i "${pcmPath}" "${mp3Path}"`,
-      { env: { ...process.env, PATH: EXEC_PATH }, timeout: 10000 },
+      withVoiceToolPath(`ffmpeg -y -f s16le -ar 24000 -ac 1 -i "${pcmPath}" "${mp3Path}"`),
+      { timeout: 10000 },
     );
     try { await unlink(pcmPath); } catch { /* ignore */ }
     if (existsSync(mp3Path)) {
@@ -148,8 +148,8 @@ export async function convertAmrToMp3(
   const mp3Path = amrPath.replace(/\.[^.]+$/, ".mp3");
   try {
     await execAsync(
-      `ffmpeg -y -i "${amrPath}" -ar 16000 -ac 1 "${mp3Path}"`,
-      { env: { ...process.env, PATH: EXEC_PATH }, timeout: 10000 },
+      withVoiceToolPath(`ffmpeg -y -i "${amrPath}" -ar 16000 -ac 1 "${mp3Path}"`),
+      { timeout: 10000 },
     );
     if (existsSync(mp3Path)) {
       log?.info(`AMR → mp3 OK: ${mp3Path}`);

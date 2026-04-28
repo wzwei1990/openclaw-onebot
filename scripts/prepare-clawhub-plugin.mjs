@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
-const outputRoot = join(repoRoot, ".clawhub-plugin", "openclaw-onebot-plugin");
 
 const basePackage = JSON.parse(await readFile(join(repoRoot, "package.json"), "utf8"));
 const manifest = JSON.parse(await readFile(join(repoRoot, "openclaw.plugin.json"), "utf8"));
+const outputRoot = join(repoRoot, ".clawhub-plugin", "openclaw-onebot-plugin");
 
 const releasePackage = {
   name: "openclaw-onebot-plugin",

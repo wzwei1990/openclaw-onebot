@@ -11,11 +11,13 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 支持 [NapCat](https://github.com/NapNeko/NapCatQQ)、[go-cqhttp](https://github.com/Mrs4s/go-cqhttp) 等所有兼容 OneBot 11 协议的 QQ 机器人框架。
 
 说明：
+- npm 包名是 `openclaw-onebot`
+- ClawHub package payload 包名是 `openclaw-onebot-plugin`
 - 插件 `id` 是 `openclaw-onebot`
 - 通道 `id` 仍然是 `onebot`
-- 因此 `plugins.allow` / `plugins.entries` / `plugins.installs` 使用 `openclaw-onebot`
+- 因此 `plugins.allow` / `plugins.entries` 使用 `openclaw-onebot`；安装记录由 `openclaw plugins install` 管理
 - `channels.onebot` 保持不变
-- 当前版本对齐 OpenClaw `2026.4.9` / plugin-sdk `2026.4.9`，并声明 `setupEntry`
+- 当前版本对齐 OpenClaw `2026.4.26` / plugin-sdk `2026.4.26`，并声明 `setupEntry` 与 `channelConfigs` manifest metadata
 
 ### 功能
 
@@ -32,7 +34,7 @@ OpenClaw 的 **OneBot 11 协议通道插件**，让 QQ 成为 OpenClaw 一等消
 - 🔄 WebSocket 自动重连（指数退避）
 - 🔒 可选 access token 鉴权
 - 🎯 `allowFrom` 消息来源过滤（私聊/群聊/用户级别）
-- ✅ 116 个测试用例全部通过
+- ✅ 119 个测试用例全部通过
 - 📈 覆盖率可通过 `npm run coverage` 复核
 
 ### 架构
@@ -65,12 +67,10 @@ bash scripts/install.sh
 
 # 或手动（先在仓库根目录准备发布包）
 npm install && npm run prepare:clawhub:plugin
-mkdir -p ~/.openclaw/plugins/onebot
-cp -r .clawhub-plugin/openclaw-onebot-plugin/* ~/.openclaw/plugins/onebot/
-cd ~/.openclaw/plugins/onebot && npm install --omit=dev --omit=peer --no-package-lock --no-audit --no-fund
+openclaw plugins install .clawhub-plugin/openclaw-onebot-plugin --force
 ```
 
-`scripts/install.sh` 会先在源码仓库生成 `.clawhub-plugin/openclaw-onebot-plugin` 精简发布包，再把这份运行时 payload 安装到 OpenClaw 目录，并自动尝试执行 `scripts/sync-openclaw-cli.mjs`，把 `--shared-dir` / `--container-shared-dir` 接到本机 OpenClaw CLI。
+`scripts/install.sh` 会先在源码仓库生成 `.clawhub-plugin/openclaw-onebot-plugin` 精简发布包，并优先通过 `openclaw plugins install` 写入新版插件安装索引；旧版 OpenClaw 会回退到手动复制安装。脚本还会自动尝试执行 `scripts/sync-openclaw-cli.mjs`，把 `--shared-dir` / `--container-shared-dir` 接到本机 OpenClaw CLI。
 
 #### 2. 配置
 
@@ -104,7 +104,7 @@ cd ~/.openclaw/plugins/onebot && npm install --omit=dev --omit=peer --no-package
 说明：
 - 插件配置键使用 `openclaw-onebot`
 - 通道配置键使用 `channels.onebot`
-- 如果你是通过本地路径/扩展目录安装插件，通常还需要在 `plugins.installs.openclaw-onebot` 中指向实际安装目录；如果用 OpenClaw 自己的插件安装流程，这一项会自动生成
+- 不要手写 `plugins.installs`；新版 OpenClaw 会把插件安装记录保存在托管安装索引中，请使用 `openclaw plugins install <path-or-package>`
 
 也支持环境变量：
 
@@ -182,14 +182,20 @@ openclaw gateway restart
 {
   "channels": {
     "onebot": {
-      "blockStreamingCoalesce": {
-        "minChars": 80,
-        "idleMs": 600
+      "streaming": {
+        "block": {
+          "coalesce": {
+            "minChars": 80,
+            "idleMs": 600
+          }
+        }
       }
     }
   }
 }
 ```
+
+旧版 `channels.onebot.blockStreamingCoalesce` 仍兼容；新版 `openclaw doctor --fix` 会把它迁移到 `channels.onebot.streaming.block.coalesce`。
 
 ### 验证
 
@@ -251,7 +257,7 @@ services:
 
 ```bash
 npm install
-npm test          # 116 tests
+npm test          # 119 tests
 npm run build     # 编译 TypeScript
 npm run coverage  # 覆盖率报告
 npm run sync:openclaw-cli  # 重新同步 OpenClaw CLI 的 shared-dir 参数
@@ -262,15 +268,17 @@ npm run sync:openclaw-cli  # 重新同步 OpenClaw CLI 的 shared-dir 参数
 ```bash
 npm ci --ignore-scripts
 npm run release:check
-npm publish
-git tag v<package-version>
-git push origin main --tags
+npm publish --access public
 ```
 
 说明：
-- `npm run release:check` 会串行执行 `build`、全量 `vitest`、`npm pack --dry-run`、`prepare:clawhub:plugin`
-- ClawHub 发布产物输出到 `.clawhub-plugin/openclaw-onebot-plugin/`
-- GitHub Release 建议直接复用同一个 `v<package-version>` tag
+- `npm run release:check` 会串行执行 `build`、全量 `vitest`、`npm pack --dry-run`、`npm publish --dry-run`、ClawHub package/skill 产物准备
+- npm 包名保持 `openclaw-onebot`，用于兼容已经安装 `openclaw-onebot@1.2.x` 的用户
+- ClawHub package payload 包名是 `openclaw-onebot-plugin`
+- OpenClaw runtime manifest id 仍是 `openclaw-onebot`，用于现有 `plugins.allow` / `plugins.entries` 配置兼容
+- ClawHub package 产物输出到 `.clawhub-plugin/openclaw-onebot-plugin/`
+- ClawHub skill 产物输出到 `.clawhub-skill/openclaw-onebot/`
+- npm 发布后，再创建同版本 GitHub tag/release，并用同一个 tag 发布 ClawHub package 和 skill；完整命令见 [docs/release-runbook.md](docs/release-runbook.md)
 
 ---
 
@@ -279,11 +287,13 @@ git push origin main --tags
 An [OpenClaw](https://github.com/openclaw/openclaw) **native channel plugin** that connects to [NapCat](https://github.com/NapNeko/NapCatQQ), [go-cqhttp](https://github.com/Mrs4s/go-cqhttp), or any OneBot 11 compatible QQ bot framework.
 
 Note:
+- npm package name: `openclaw-onebot`
+- ClawHub package payload name: `openclaw-onebot-plugin`
 - Plugin `id`: `openclaw-onebot`
 - Channel `id`: `onebot`
-- Use `openclaw-onebot` in `plugins.allow` / `plugins.entries` / `plugins.installs`
+- Use `openclaw-onebot` in `plugins.allow` / `plugins.entries`; install records are managed by `openclaw plugins install`
 - Keep `channels.onebot` unchanged
-- This release targets OpenClaw `2026.4.9` / plugin-sdk `2026.4.9` and declares `setupEntry`
+- This release targets OpenClaw `2026.4.26` / plugin-sdk `2026.4.26` and declares `setupEntry` plus `channelConfigs` manifest metadata
 
 ### Features
 
@@ -300,7 +310,7 @@ Note:
 - 🔒 Optional access token authentication
 - 🎯 `allowFrom` filtering (private/group/user-level)
 - 🧭 Full OpenClaw text-command passthrough (`/status`, `/help`, `/commands`, `/model`, `/new`, `/reset`, etc.)
-- ✅ 116 tests passing
+- ✅ 119 tests passing
 - 📈 Coverage can be re-generated with `npm run coverage`
 
 ### Quick Start
@@ -313,12 +323,10 @@ bash scripts/install.sh
 
 # Or manual (prepare the release payload from the repo root first)
 npm install && npm run prepare:clawhub:plugin
-mkdir -p ~/.openclaw/plugins/onebot
-cp -r .clawhub-plugin/openclaw-onebot-plugin/* ~/.openclaw/plugins/onebot/
-cd ~/.openclaw/plugins/onebot && npm install --omit=dev --omit=peer --no-package-lock --no-audit --no-fund
+openclaw plugins install .clawhub-plugin/openclaw-onebot-plugin --force
 ```
 
-`scripts/install.sh` prepares `.clawhub-plugin/openclaw-onebot-plugin` in the source repo first, installs that trimmed runtime payload, and then runs `scripts/sync-openclaw-cli.mjs` so the local OpenClaw CLI keeps the OneBot `--shared-dir` / `--container-shared-dir` flags wired in after install.
+`scripts/install.sh` prepares `.clawhub-plugin/openclaw-onebot-plugin` in the source repo first and prefers `openclaw plugins install` so current OpenClaw builds update the managed plugin install index. Older OpenClaw builds fall back to the legacy manual copy path. The script also runs `scripts/sync-openclaw-cli.mjs` so the local OpenClaw CLI keeps the OneBot `--shared-dir` / `--container-shared-dir` flags wired in after install.
 
 #### 2. Configure
 
@@ -349,7 +357,7 @@ Add to `openclaw.json`:
 Notes:
 - Use `openclaw-onebot` for plugin config keys
 - Keep runtime channel config under `channels.onebot`
-- If you install from a local path / extension directory, you may also need `plugins.installs.openclaw-onebot` pointing at the actual install directory; OpenClaw usually writes this automatically during plugin install
+- Do not edit `plugins.installs` by hand; current OpenClaw stores install records in a managed plugin index, so use `openclaw plugins install <path-or-package>`
 
 Or via environment variables:
 
@@ -407,14 +415,20 @@ End-to-end voice flow:
 {
   "channels": {
     "onebot": {
-      "blockStreamingCoalesce": {
-        "minChars": 80,
-        "idleMs": 600
+      "streaming": {
+        "block": {
+          "coalesce": {
+            "minChars": 80,
+            "idleMs": 600
+          }
+        }
       }
     }
   }
 }
 ```
+
+Legacy `channels.onebot.blockStreamingCoalesce` remains accepted; current `openclaw doctor --fix` migrates it to `channels.onebot.streaming.block.coalesce`.
 
 ### Verification
 
@@ -456,7 +470,7 @@ npm run react-test -- --message-id <message_id> --emoji 76
 
 ```bash
 npm install
-npm test          # Run 116 tests
+npm test          # Run 119 tests
 npm run build     # Compile TypeScript
 npm run coverage  # Coverage report
 npm run sync:openclaw-cli  # Re-apply shared-dir CLI wiring after OpenClaw upgrades
@@ -467,15 +481,17 @@ npm run sync:openclaw-cli  # Re-apply shared-dir CLI wiring after OpenClaw upgra
 ```bash
 npm ci --ignore-scripts
 npm run release:check
-npm publish
-git tag v<package-version>
-git push origin main --tags
+npm publish --access public
 ```
 
 Notes:
-- `npm run release:check` runs `build`, the full `vitest` suite, `npm pack --dry-run`, and `prepare:clawhub:plugin`
-- The ClawHub payload is written to `.clawhub-plugin/openclaw-onebot-plugin/`
-- Reuse the same `v<package-version>` tag when drafting the GitHub Release
+- `npm run release:check` runs `build`, the full `vitest` suite, `npm pack --dry-run`, `npm publish --dry-run`, and ClawHub package/skill staging
+- npm package name stays `openclaw-onebot` for users already installed from `openclaw-onebot@1.2.x`
+- ClawHub package payload name: `openclaw-onebot-plugin`
+- OpenClaw runtime manifest id stays `openclaw-onebot` for existing `plugins.allow` / `plugins.entries` compatibility
+- The ClawHub package payload is written to `.clawhub-plugin/openclaw-onebot-plugin/`
+- The ClawHub skill payload is written to `.clawhub-skill/openclaw-onebot/`
+- After npm is published, create the same-version GitHub tag/release and publish the ClawHub package plus skill from that tag; see [docs/release-runbook.md](docs/release-runbook.md)
 
 ## License
 

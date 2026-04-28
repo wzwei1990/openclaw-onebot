@@ -4,6 +4,7 @@
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+OPENCLAW_CLI="${OPENCLAW_CLI:-openclaw}"
 PLUGIN_DIR="${OPENCLAW_HOME:-$HOME/.openclaw}/plugins/onebot"
 RELEASE_DIR="$SKILL_DIR/.clawhub-plugin/openclaw-onebot-plugin"
 
@@ -17,6 +18,23 @@ fi
 
 echo "📦 Preparing release payload..."
 (cd "$SKILL_DIR" && npm run prepare:clawhub:plugin)
+
+if command -v "$OPENCLAW_CLI" >/dev/null 2>&1; then
+  echo "🔌 Registering plugin with OpenClaw plugin index..."
+  if "$OPENCLAW_CLI" plugins install "$RELEASE_DIR" --force; then
+    node "$RELEASE_DIR/scripts/sync-openclaw-cli.mjs" 2>/dev/null || echo "⚠️  OpenClaw CLI sync skipped; run npm run sync:openclaw-cli if needed."
+    echo "✅ OneBot plugin installed via $OPENCLAW_CLI plugins install"
+    echo ""
+    echo "📝 Next steps:"
+    echo "   1. Add to openclaw.json:"
+    echo '      "channels": { "onebot": { "enabled": true, "wsUrl": "ws://your-host:port", "httpUrl": "http://your-host:port" } }'
+    echo "   2. Restart gateway: openclaw gateway restart"
+    exit 0
+  fi
+  echo "⚠️  $OPENCLAW_CLI plugins install failed; falling back to legacy copy install."
+else
+  echo "⚠️  OpenClaw CLI not found; falling back to legacy copy install."
+fi
 
 # 创建插件目录并清理旧文件，避免残留源码安装时代的兼容文件
 mkdir -p "$PLUGIN_DIR"

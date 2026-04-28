@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readdir, rm, stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { basename, extname, isAbsolute, join, posix, relative, sep } from 'node:path';
 import type { ResolvedOneBotAccount, OneBotApiResponse, OneBotMessageSegment } from './types.js';
+import { getDefaultContainerSharedDir, getDefaultSharedDir } from './env.js';
 
 export interface OutboundContext {
   to: string;
@@ -26,8 +26,6 @@ export type OneBotReactionResult = {
   error?: string;
 };
 
-const DEFAULT_SHARED_DIR = process.env.ONEBOT_SHARED_DIR ?? join(homedir(), 'napcat', 'shared');
-const DEFAULT_CONTAINER_SHARED_DIR = process.env.ONEBOT_CONTAINER_SHARED_DIR ?? '/shared';
 const STAGED_MEDIA_DIR = 'openclaw';
 const STAGED_MEDIA_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -105,10 +103,10 @@ function getSharedConfig(account: ResolvedOneBotAccount): { sharedDir: string; c
   const raw = account.config as Record<string, unknown>;
   const sharedDir = typeof raw.sharedDir === 'string' && raw.sharedDir.trim()
     ? raw.sharedDir
-    : DEFAULT_SHARED_DIR;
+    : getDefaultSharedDir();
   const containerSharedDir = typeof raw.containerSharedDir === 'string' && raw.containerSharedDir.trim()
     ? raw.containerSharedDir.replace(/\/+$/, '') || '/shared'
-    : DEFAULT_CONTAINER_SHARED_DIR;
+    : getDefaultContainerSharedDir();
   return { sharedDir, containerSharedDir };
 }
 

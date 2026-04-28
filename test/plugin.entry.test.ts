@@ -52,11 +52,18 @@ describe('plugin entry compatibility', () => {
 
 describe('package compatibility metadata', () => {
   const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const manifest = JSON.parse(readFileSync(new URL('../openclaw.plugin.json', import.meta.url), 'utf8'));
+
+  it('keeps the existing npm package identity and runtime id stable for installed users', () => {
+    expect(packageJson.name).toBe('openclaw-onebot');
+    expect(manifest.id).toBe('openclaw-onebot');
+    expect(manifest.version).toBe(packageJson.version);
+  });
 
   it('advertises the tested openclaw build and plugin sdk versions', () => {
     expect(packageJson.openclaw.build).toEqual({
-      openclawVersion: '2026.4.9',
-      pluginSdkVersion: '2026.4.9',
+      openclawVersion: '2026.4.26',
+      pluginSdkVersion: '2026.4.26',
     });
   });
 
@@ -67,5 +74,32 @@ describe('package compatibility metadata', () => {
     });
     expect(packageJson.peerDependencies.openclaw).toBe('>=2026.3.23-1 <2027');
     expect(packageJson.openclaw.setupEntry).toBe('./dist/setup-entry.js');
+  });
+
+  it('declares channel config metadata for every manifest channel', () => {
+    expect(manifest.configSchema).toEqual({
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    });
+    expect(manifest.channels).toContain('onebot');
+    expect(manifest.channelConfigs?.onebot?.schema).toMatchObject({
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        wsUrl: { type: 'string' },
+        httpUrl: { type: 'string' },
+        accounts: { type: 'object' },
+        streaming: { $ref: '#/$defs/streaming' },
+      },
+    });
+    expect(manifest.channelEnvVars.onebot).toContain('ONEBOT_WS_URL');
+  });
+
+  it('keeps network runtime files free of direct env reads for install scanning', () => {
+    for (const sourcePath of ['../src/gateway.ts', '../src/outbound.ts', '../src/channel.ts']) {
+      const source = readFileSync(new URL(sourcePath, import.meta.url), 'utf8');
+      expect(source, sourcePath).not.toContain('process.env');
+    }
   });
 });

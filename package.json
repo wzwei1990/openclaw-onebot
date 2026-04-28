@@ -1,7 +1,7 @@
 {
   "name": "openclaw-onebot",
   "displayName": "OpenClaw OneBot",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "description": "OpenClaw OneBot 11 channel plugin for QQ messaging. Native integration with NapCat/go-cqhttp — voice pipeline, reactions, block streaming, and media delivery.",
   "type": "module",
   "main": "dist/index.js",
@@ -41,8 +41,8 @@
       "minGatewayVersion": "2026.3.23-1"
     },
     "build": {
-      "openclawVersion": "2026.4.9",
-      "pluginSdkVersion": "2026.4.9"
+      "openclawVersion": "2026.4.26",
+      "pluginSdkVersion": "2026.4.26"
     }
   },
   "scripts": {
@@ -50,9 +50,13 @@
     "dev": "tsc --watch",
     "prepack": "npm run build",
     "pack:dry-run": "npm pack --dry-run",
+    "publish:dry-run": "npm publish --dry-run",
+    "prepare:clawhub": "npm run prepare:clawhub:package && npm run prepare:clawhub:skill",
+    "prepare:clawhub:package": "npm run prepare:clawhub:plugin",
     "prepare:clawhub:plugin": "npm run build && node ./scripts/prepare-clawhub-plugin.mjs",
+    "prepare:clawhub:skill": "node ./scripts/prepare-clawhub-skill.mjs",
     "react-test": "node ./scripts/react-test.mjs",
-    "release:check": "npm run build && npm test && npm run pack:dry-run && npm run prepare:clawhub:plugin",
+    "release:check": "npm run build && npm test && npm run pack:dry-run && npm run publish:dry-run && npm run prepare:clawhub",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
@@ -67,7 +71,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/ws": "^8.5.0",
-    "openclaw": "^2026.4.9",
+    "openclaw": "^2026.4.26",
     "typescript": "^5.0.0",
     "vitest": "^2.1.9",
     "@vitest/coverage-v8": "^2.1.9"
