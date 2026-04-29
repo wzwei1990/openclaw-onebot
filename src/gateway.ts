@@ -216,7 +216,57 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
       const pluginRuntime = getOneBotRuntime();
 
-          // (no quoted-message helper here)
+          // Echo/pending map for sending OneBot actions over this WebSocket (simple RPC)
+          const pendingEcho = new Map<string, { resolve: (v: any) => void; timeout: ReturnType<typeof setTimeout> }>();
+          let echoCounter = 0;
+          const nextEcho = () => `onebot-${Date.now()}-${++echoCounter}`;
+
+          const sendOneBotAction = (wsocket: WebSocket, action: string, params: Record<string, unknown>) => {
+            const echo = nextEcho();
+            const payload = { action, params, echo };
+            log?.info?.(`[onebot:${account.accountId}] sendOneBotAction: action=${action} echo=${echo} params=${JSON.stringify(params).slice(0,200)}`);
+            return new Promise<any>((resolve) => {
+              const timeout = setTimeout(() => {
+                pendingEcho.delete(echo);
+                log?.info?.(`[onebot:${account.accountId}] sendOneBotAction timeout: action=${action} echo=${echo}`);
+                resolve(null);
+              }, 15000);
+              pendingEcho.set(echo, { resolve, timeout });
+              try {
+                wsocket.send(JSON.stringify(payload), (err) => {
+                  if (err) {
+                    clearTimeout(timeout);
+                    pendingEcho.delete(echo);
+                    log?.info?.(`[onebot:${account.accountId}] sendOneBotAction send error: action=${action} echo=${echo} err=${String(err)}`);
+                    resolve(null);
+                  }
+                });
+              } catch (err) {
+                clearTimeout(timeout);
+                pendingEcho.delete(echo);
+                log?.info?.(`[onebot:${account.accountId}] sendOneBotAction exception: action=${action} echo=${echo} err=${String(err)}`);
+                resolve(null);
+              }
+            });
+          };
+
+          const fetchQuotedMessage = async (messageId: string | number) => {
+            try {
+              log?.info?.(`[onebot:${account.accountId}] fetchQuotedMessage: trying ws get_msg message_id=${messageId}`);
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                const res = await sendOneBotAction(ws, "get_msg", { message_id: messageId });
+                log?.info?.(`[onebot:${account.accountId}] fetchQuotedMessage: ws response for message_id=${messageId} -> ${res ? JSON.stringify(res).slice(0,400) : "<null>"}`);
+                if (res?.retcode === 0 && res?.data) return res.data as any;
+              } else {
+                log?.info?.(`[onebot:${account.accountId}] fetchQuotedMessage: ws not open`);
+              }
+              // No ws RPC response — do not fallback to HTTP here (keep simple)
+              return null;
+            } catch (err) {
+              log?.info?.(`[onebot:${account.accountId}] fetchQuotedMessage exception: ${String(err)}`);
+              return null;
+            }
+          };
 
       // ── Dispatch a (possibly batched) set of messages ──
 
@@ -473,7 +523,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
       // ── Buffer an incoming message and debounce dispatch ──
 
-      const bufferMessage = (event: OneBotMessageEvent) => {
+      const bufferMessage = async (event: OneBotMessageEvent) => {
         const isGroup = event.message_type === "group";
         const senderId = String(event.user_id);
         const senderName = event.sender.card || event.sender.nickname || senderId;
@@ -481,7 +531,41 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
         // Start with message text extracted from segments or raw_message
         let text = extractText(event.message) || event.raw_message || "";
 
-        // (quoted-message fetching removed)
+        // Try to detect a quoted (reply) message id in segments or raw_message
+        let replyId: string | number | null = null;
+        try {
+          for (const seg of event.message) {
+            if (seg.type === "reply") {
+              const d = seg.data as any;
+              replyId = d.id ?? d.message_id ?? d.reply ?? null;
+              if (replyId) break;
+            }
+          }
+          if (!replyId && event.raw_message) {
+            const m = /\[CQ:reply,id=(\d+)\]/i.exec(event.raw_message);
+            if (m) replyId = m[1];
+          }
+        } catch {}
+
+        // If replyId found, fetch quoted message via WS RPC (best-effort) and collect quoted images
+        const quotedImages: string[] = [];
+        if (replyId != null) {
+          try {
+            const quoted = await fetchQuotedMessage(replyId as string | number);
+            if (quoted && quoted.message) {
+              const qmsg = typeof quoted.message === "string" ? JSON.parse(String(quoted.message)) : quoted.message;
+              const qtext = Array.isArray(qmsg) ? extractText(qmsg) : String(qmsg || "");
+              const qimgs = Array.isArray(qmsg) ? extractImages(qmsg) : [];
+              if (qtext.trim()) {
+                const senderLabel = quoted?.sender?.nickname ?? quoted?.sender?.user_id ?? "某人";
+                text = `[引用 ${String(senderLabel)} 的消息：${qtext.trim()}]\n${text}`;
+              }
+              if (qimgs.length > 0) quotedImages.push(...qimgs);
+            }
+          } catch (e) {
+            log?.debug?.(`[onebot:${account.accountId}] fetchQuotedMessage failed: ${String(e)}`);
+          }
+        }
 
         // Extract images from segments, record source for debugging
         const imagesFromSegments: string[] = [];
@@ -495,39 +579,45 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
         let images: string[] = imagesFromSegments.slice();
         if (images.length > 0) {
           log?.info?.(`[onebot:${account.accountId}] extractImages: found ${images.length} image(s) from message segments`);
-          for (const img of images) log?.info?.(`[onebot:${account.accountId}] image(segment): ${img}`);
+          // for (const img of images) log?.info?.(`[onebot:${account.accountId}] image(segment): ${img}`);
         } else {
           // If no image segments found, try parsing CQ codes from raw_message as a fallback
           const rawImgs = extractImagesFromRawMessage(event.raw_message);
           if (rawImgs.length > 0) {
             images = rawImgs;
             log?.info?.(`[onebot:${account.accountId}] extractImages: fallback parsed ${rawImgs.length} image(s) from raw_message`);
-            for (const img of rawImgs) log?.info?.(`[onebot:${account.accountId}] image(parsedRaw): ${img}`);
+            // for (const img of rawImgs) log?.info?.(`[onebot:${account.accountId}] image(parsedRaw): ${img}`);
           } else {
-            // No images found — dump segments for inspection
+            // No images found — dump segments for inspection segments=${JSON.stringify(event.message)}
             try {
-              log?.info?.(`[onebot:${account.accountId}] extractImages: no images found; segments=${JSON.stringify(event.message)}`);
+              log?.info?.(`[onebot:${account.accountId}] extractImages: no images found`);
             } catch (e) {
-              log?.info?.(`[onebot:${account.accountId}] extractImages: no images found; could not stringify segments`);
+              log?.info?.(`[onebot:${account.accountId}] extractImages: no images found`);
             }
           }
         }
-        // (no quoted-image merge)
+        // merge quoted images (avoid duplicates)
+        if (quotedImages.length > 0) {
+          for (const qi of quotedImages) {
+            if (!images.includes(qi)) images.push(qi);
+          }
+          log?.info?.(`[onebot:${account.accountId}] merged ${quotedImages.length} quoted image(s) into message images`);
+        }
 
         const recordSegments = extractRecordSegments(event.message);
 
         // Log resolved mention/keyword config per message for verification
-        try {
-          const requireMentionResolved = account.requireMention === true;
-          const triggerKeywordsResolved = account.triggerKeywords ?? account.config.triggerKeywords ?? [];
-          log?.info?.(
-            `[onebot:${account.accountId}] Message config: requireMention=${requireMentionResolved} triggerKeywords=${JSON.stringify(
-              triggerKeywordsResolved,
-            )}`,
-          );
-        } catch (e) {
-          log?.info?.(`[onebot:${account.accountId}] Failed to read message-level config: ${String(e)}`);
-        }
+        // try {
+        //   const requireMentionResolved = account.requireMention === true;
+        //   const triggerKeywordsResolved = account.triggerKeywords ?? account.config.triggerKeywords ?? [];
+        //   log?.info?.(
+        //     `[onebot:${account.accountId}] Message config: requireMention=${requireMentionResolved} triggerKeywords=${JSON.stringify(
+        //       triggerKeywordsResolved,
+        //     )}`,
+        //   );
+        // } catch (e) {
+        //   log?.info?.(`[onebot:${account.accountId}] Failed to read message-level config: ${String(e)}`);
+        // }
 
         // allowFrom check
         const peerId = isGroup ? `group:${event.group_id}` : `private:${senderId}`;
@@ -678,11 +768,31 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
       ws.on("message", async (data) => {
         try {
           const rawData = data.toString();
-          const event = JSON.parse(rawData) as OneBotEvent;
+          let parsed: any;
+          try {
+            parsed = JSON.parse(rawData);
+          } catch {
+            parsed = null;
+          }
 
-          log?.debug?.(`[onebot:${account.accountId}] Event: post_type=${event.post_type}`);
+          // Handle echo responses for sendOneBotAction RPC
+          if (parsed && parsed.echo && pendingEcho.has(parsed.echo)) {
+            try {
+              const h = pendingEcho.get(parsed.echo)!;
+              clearTimeout(h.timeout);
+              pendingEcho.delete(parsed.echo);
+              h.resolve(parsed);
+            } catch {
+              /* ignore */
+            }
+            return;
+          }
 
-          switch (event.post_type) {
+          const event = (parsed ?? (rawData ? JSON.parse(rawData) : null)) as OneBotEvent;
+
+          log?.debug?.(`[onebot:${account.accountId}] Event: post_type=${event?.post_type}`);
+
+          switch (event?.post_type) {
             case "meta_event":
               if (event.meta_event_type === "lifecycle" && event.sub_type === "connect") {
                 log?.info(`[onebot:${account.accountId}] Lifecycle: connected`);
