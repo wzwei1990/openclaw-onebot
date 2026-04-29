@@ -58,6 +58,23 @@ export function extractImages(segments: OneBotMessageSegment[]): string[] {
     .filter(Boolean);
 }
 
+// Fallback: parse CQ-style image codes from raw message text, e.g. [CQ:image,file=xxx] or [CQ:image,url=...]
+export function extractImagesFromRawMessage(raw: string | undefined): string[] {
+  if (!raw) return [];
+  const imgs: string[] = [];
+  // Prefer `url=` when both `file=` and `url=` present
+  const re = /\[CQ:image,([^\]]*)\]/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw))) {
+    const attrs = m[1];
+    const fileMatch = /file=([^,\]]+)/i.exec(attrs);
+    const urlMatch = /url=([^,\]]+)/i.exec(attrs);
+    const chosen = urlMatch ? urlMatch[1] : fileMatch ? fileMatch[1] : null;
+    if (chosen) imgs.push(chosen);
+  }
+  return imgs;
+}
+
 export function extractRecordSegments(segments: OneBotMessageSegment[]): OneBotMessageSegment[] {
   return segments.filter((seg) => seg.type === "record");
 }
@@ -199,6 +216,8 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
       const pluginRuntime = getOneBotRuntime();
 
+          // (no quoted-message helper here)
+
       // ── Dispatch a (possibly batched) set of messages ──
 
       const dispatchMessages = async (batchKey: string, messages: BufferedMessage[]) => {
@@ -296,6 +315,20 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
             mediaPayload.MediaTypes = voiceMedia.map((v) => v.contentType);
             mediaPayload.MediaUrls = voiceMedia.map((v) => v.path);
           }
+        }
+
+        // Include images in media payload so downstream handlers see them like single-image messages
+        if (combinedImages.length > 0) {
+          mediaPayload.MediaUrls = mediaPayload.MediaUrls ?? combinedImages;
+          mediaPayload.MediaPaths = mediaPayload.MediaPaths ?? combinedImages;
+          // Provide image-specific aliases as well
+          mediaPayload.ImageUrls = combinedImages;
+          mediaPayload.ImagePaths = combinedImages;
+        }
+
+        if (combinedImages.length > 0) {
+          log?.info?.(`[onebot:${account.accountId}] dispatchMessages: attaching ${combinedImages.length} image(s) to ctxPayload`);
+          for (const img of combinedImages) log?.info?.(`[onebot:${account.accountId}] dispatchMessages image: ${img}`);
         }
 
         const ctxPayload = pluginRuntime.channel.reply.finalizeInboundContext({
@@ -444,9 +477,57 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
         const isGroup = event.message_type === "group";
         const senderId = String(event.user_id);
         const senderName = event.sender.card || event.sender.nickname || senderId;
-        const text = extractText(event.message) || event.raw_message;
-        const images = extractImages(event.message);
+
+        // Start with message text extracted from segments or raw_message
+        let text = extractText(event.message) || event.raw_message || "";
+
+        // (quoted-message fetching removed)
+
+        // Extract images from segments, record source for debugging
+        const imagesFromSegments: string[] = [];
+        for (const seg of event.message) {
+          if (seg.type === 'image') {
+            const val = String((seg.data as any)?.url ?? (seg.data as any)?.file ?? '');
+            if (val) imagesFromSegments.push(val);
+          }
+        }
+
+        let images: string[] = imagesFromSegments.slice();
+        if (images.length > 0) {
+          log?.info?.(`[onebot:${account.accountId}] extractImages: found ${images.length} image(s) from message segments`);
+          for (const img of images) log?.info?.(`[onebot:${account.accountId}] image(segment): ${img}`);
+        } else {
+          // If no image segments found, try parsing CQ codes from raw_message as a fallback
+          const rawImgs = extractImagesFromRawMessage(event.raw_message);
+          if (rawImgs.length > 0) {
+            images = rawImgs;
+            log?.info?.(`[onebot:${account.accountId}] extractImages: fallback parsed ${rawImgs.length} image(s) from raw_message`);
+            for (const img of rawImgs) log?.info?.(`[onebot:${account.accountId}] image(parsedRaw): ${img}`);
+          } else {
+            // No images found — dump segments for inspection
+            try {
+              log?.info?.(`[onebot:${account.accountId}] extractImages: no images found; segments=${JSON.stringify(event.message)}`);
+            } catch (e) {
+              log?.info?.(`[onebot:${account.accountId}] extractImages: no images found; could not stringify segments`);
+            }
+          }
+        }
+        // (no quoted-image merge)
+
         const recordSegments = extractRecordSegments(event.message);
+
+        // Log resolved mention/keyword config per message for verification
+        try {
+          const requireMentionResolved = account.requireMention === true;
+          const triggerKeywordsResolved = account.triggerKeywords ?? account.config.triggerKeywords ?? [];
+          log?.info?.(
+            `[onebot:${account.accountId}] Message config: requireMention=${requireMentionResolved} triggerKeywords=${JSON.stringify(
+              triggerKeywordsResolved,
+            )}`,
+          );
+        } catch (e) {
+          log?.info?.(`[onebot:${account.accountId}] Failed to read message-level config: ${String(e)}`);
+        }
 
         // allowFrom check
         const peerId = isGroup ? `group:${event.group_id}` : `private:${senderId}`;
@@ -464,7 +545,45 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
           `[onebot:${account.accountId}] ${isGroup ? "Group" : "Private"} message from ${senderName}(${senderId}) msg=${event.message_id}: ${text.slice(0, 100)}`,
         );
 
-        if (isGroup && account.groupAutoReact) {
+        // Mentions / trigger keywords: in group chats, optionally require an @mention
+        // or presence of any trigger keyword before proceeding to reply. Auto-reaction
+        // should only occur if the message will be processed (i.e. allowed).
+        let allowedByMentionOrKeyword = true;
+        if (isGroup) {
+          const requireMention = account.requireMention === true;
+          const triggerKeywords = account.triggerKeywords ?? account.config.triggerKeywords ?? [];
+          const filteringActive = requireMention === true || (Array.isArray(triggerKeywords) && triggerKeywords.length > 0);
+
+          if (filteringActive) {
+            allowedByMentionOrKeyword = false;
+
+            if (requireMention) {
+              const mentioned = event.message.some((seg) => seg.type === "at" && String((seg.data as any)?.qq) === String(event.self_id));
+              if (mentioned) allowedByMentionOrKeyword = true;
+            }
+
+            if (!allowedByMentionOrKeyword && Array.isArray(triggerKeywords) && triggerKeywords.length > 0) {
+              const lowerText = (text || event.raw_message || "").toLowerCase();
+              for (const kw of triggerKeywords) {
+                if (!kw) continue;
+                if (lowerText.includes(String(kw).toLowerCase())) {
+                  allowedByMentionOrKeyword = true;
+                  break;
+                }
+              }
+            }
+
+            if (!allowedByMentionOrKeyword) {
+              log?.debug?.(`[onebot:${account.accountId}] Ignoring group message without mention or trigger keyword`);
+              return;
+            }
+          } else {
+            // No filtering configured — allow processing as before
+            allowedByMentionOrKeyword = true;
+          }
+        }
+
+        if (isGroup && account.groupAutoReact && allowedByMentionOrKeyword) {
           void reactToMessage(account, event.message_id, account.groupAutoReactEmojiId)
             .then((result) => {
               if (!result.ok) {
