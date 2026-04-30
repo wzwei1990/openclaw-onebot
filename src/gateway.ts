@@ -531,6 +531,50 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
         // Start with message text extracted from segments or raw_message
         let text = extractText(event.message) || event.raw_message || "";
 
+        // Skip own messages
+        if (event.user_id === event.self_id) return;
+
+        log?.info(
+          `[onebot:${account.accountId}] ${isGroup ? "Group" : "Private"} message from ${senderName}(${senderId}) msg=${event.message_id}: ${text.slice(0, 100)}`,
+        );
+        // Mentions / trigger keywords: in group chats, optionally require an @mention
+        // or presence of any trigger keyword before proceeding to reply. If filtering
+        // is active and message doesn't match, skip processing early to avoid work.
+        let allowedByMentionOrKeyword = true;
+        if (isGroup) {
+          const requireMention = account.requireMention === true;
+          const triggerKeywords = account.triggerKeywords ?? account.config.triggerKeywords ?? [];
+          const filteringActive = requireMention === true || (Array.isArray(triggerKeywords) && triggerKeywords.length > 0);
+
+          if (filteringActive) {
+            allowedByMentionOrKeyword = false;
+
+            if (requireMention) {
+              const mentioned = event.message.some((seg) => seg.type === "at" && String((seg.data as any)?.qq) === String(event.self_id));
+              if (mentioned) allowedByMentionOrKeyword = true;
+            }
+
+            if (!allowedByMentionOrKeyword && Array.isArray(triggerKeywords) && triggerKeywords.length > 0) {
+              const lowerText = (text || event.raw_message || "").toLowerCase();
+              for (const kw of triggerKeywords) {
+                if (!kw) continue;
+                if (lowerText.includes(String(kw).toLowerCase())) {
+                  allowedByMentionOrKeyword = true;
+                  break;
+                }
+              }
+            }
+
+            if (!allowedByMentionOrKeyword) {
+              log?.debug?.(`[onebot:${account.accountId}] Ignoring group message without mention or trigger keyword`);
+              return;
+            }
+          } else {
+            // No filtering configured — allow processing as before
+            allowedByMentionOrKeyword = true;
+          }
+        }
+
         // Try to detect a quoted (reply) message id in segments or raw_message
         let replyId: string | number | null = null;
         try {
@@ -625,51 +669,6 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
           if (!account.allowFrom.some((pattern) => peerId === pattern || pattern === "*")) {
             log?.debug?.(`[onebot:${account.accountId}] Ignoring message from unlisted ${peerId}`);
             return;
-          }
-        }
-
-        // Skip own messages
-        if (event.user_id === event.self_id) return;
-
-        log?.info(
-          `[onebot:${account.accountId}] ${isGroup ? "Group" : "Private"} message from ${senderName}(${senderId}) msg=${event.message_id}: ${text.slice(0, 100)}`,
-        );
-
-        // Mentions / trigger keywords: in group chats, optionally require an @mention
-        // or presence of any trigger keyword before proceeding to reply. Auto-reaction
-        // should only occur if the message will be processed (i.e. allowed).
-        let allowedByMentionOrKeyword = true;
-        if (isGroup) {
-          const requireMention = account.requireMention === true;
-          const triggerKeywords = account.triggerKeywords ?? account.config.triggerKeywords ?? [];
-          const filteringActive = requireMention === true || (Array.isArray(triggerKeywords) && triggerKeywords.length > 0);
-
-          if (filteringActive) {
-            allowedByMentionOrKeyword = false;
-
-            if (requireMention) {
-              const mentioned = event.message.some((seg) => seg.type === "at" && String((seg.data as any)?.qq) === String(event.self_id));
-              if (mentioned) allowedByMentionOrKeyword = true;
-            }
-
-            if (!allowedByMentionOrKeyword && Array.isArray(triggerKeywords) && triggerKeywords.length > 0) {
-              const lowerText = (text || event.raw_message || "").toLowerCase();
-              for (const kw of triggerKeywords) {
-                if (!kw) continue;
-                if (lowerText.includes(String(kw).toLowerCase())) {
-                  allowedByMentionOrKeyword = true;
-                  break;
-                }
-              }
-            }
-
-            if (!allowedByMentionOrKeyword) {
-              log?.debug?.(`[onebot:${account.accountId}] Ignoring group message without mention or trigger keyword`);
-              return;
-            }
-          } else {
-            // No filtering configured — allow processing as before
-            allowedByMentionOrKeyword = true;
           }
         }
 
